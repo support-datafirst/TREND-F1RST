@@ -96,24 +96,13 @@ async function pantip() {
 const sky = c => c === 0 ? 'ท้องฟ้าแจ่มใส' : c <= 2 ? 'มีเมฆบางส่วน' : c === 3 ? 'เมฆมาก' : c <= 48 ? 'มีหมอก'
   : c <= 57 ? 'ฝนปรอย' : c <= 67 ? 'ฝนตก' : c <= 79 ? 'หิมะ' : c <= 82 ? 'ฝนตกเป็นช่วง' : c <= 86 ? 'หิมะ' : 'พายุฝนฟ้าคะนอง';
 
-// When will it rain? Hourly data starts at the current (local) hour. 50% chance counts as "expected".
-function rainOutlook(times, probs, mm, rainingNow) {
-  const at = i => times[i].slice(11, 16);
-  if (rainingNow) {
-    const stop = mm.findIndex((m, i) => i > 0 && m < 0.1);
-    return { big: 'กำลังตก', small: stop > 0 ? `คาดว่าหยุดราว ${at(stop)} น.` : 'ตกต่อเนื่องอีกหลายชั่วโมง', wet: true };
-  }
-  const i = probs.findIndex(p => p >= 50);
-  if (i < 0) return { big: 'ไม่ตก', small: 'ใน 12 ชม. ข้างหน้า', wet: false };
-  return { big: i === 0 ? 'เร็วๆ นี้' : at(i), small: `คาดว่าฝนจะตก · โอกาส ${probs[i]}%`, wet: true };
-}
-
 async function weather({ lat, lon }) {
-  const j = await get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,precipitation&hourly=precipitation_probability,precipitation&forecast_hours=12&timezone=Asia/Bangkok`, true);
+  const j = await get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,precipitation&hourly=precipitation_probability&forecast_hours=12&timezone=Asia/Bangkok`, true);
   const c = j.current, h = j.hourly;
   return {
     temp: Math.round(c.temperature_2m), feels: Math.round(c.apparent_temperature), sky: sky(c.weather_code),
-    rain: rainOutlook(h.time, h.precipitation_probability, h.precipitation, c.precipitation > 0),
+    // Hourly chance of rain for the next 12 h (local time, from the current hour), drawn as a step chart on the TV.
+    rain: { now: c.precipitation > 0, hours: h.time.map((t, i) => ({ t: t.slice(11, 16), p: h.precipitation_probability[i] ?? 0 })) },
   };
 }
 
@@ -135,7 +124,7 @@ async function air({ lat, lon }) {
   const d2 = s => (s.lat - lat) ** 2 + ((s.long - lon) * Math.cos(lat * Math.PI / 180)) ** 2;
   const s = j.stations.filter(s => +s.AQILast?.PM25?.value > 0).sort((a, b) => d2(a) - d2(b))[0];
   const pm = s.AQILast.PM25, [label, color] = AQI[pm.color_id] || ['', '#aab1bf'];
-  return { pm25: +pm.value, label, color, station: s.nameTH.trim(), time: s.AQILast.time };
+  return { pm25: +pm.value, label, color, station: s.nameTH.trim().replace(/^สำนักงาน/, '').replace(/\s*กรุงเทพฯ$/, ''), time: s.AQILast.time };
 }
 
 // Any YouTube link (watch, youtu.be, live, shorts, playlist) -> muted autoplay loop embed. Browsers block autoplay with sound.
@@ -240,10 +229,6 @@ function check() {
   assert.equal(youtubeEmbed('not a link'), '');
   assert.equal(clean('🔴Live สด! 𝐏𝐔𝐁𝐆 𝐓𝐇𝐀𝐈𝐋𝐀𝐍𝐃 𝟐𝟎𝟐𝟔 🇹🇭 ❤️'), 'Live สด! PUBG THAILAND 2026');
   assert.equal(clean('กำลังมาแรง'), 'กำลังมาแรง', 'Thai sara am must survive');
-  const hrs = ['2026-09-24T12:00', '2026-09-24T13:00', '2026-09-24T14:00', '2026-09-24T15:00'];
-  assert.deepEqual(rainOutlook(hrs, [10, 20, 80, 90], [0, 0, 1, 2], false), { big: '14:00', small: 'คาดว่าฝนจะตก · โอกาส 80%', wet: true });
-  assert.equal(rainOutlook(hrs, [90, 90, 40, 10], [2, 1, 0, 0], true).small, 'คาดว่าหยุดราว 14:00 น.');
-  assert.equal(rainOutlook(hrs, [10, 20, 30, 20], [0, 0, 0, 0], false).big, 'ไม่ตก');
   console.log('check done');
 }
 

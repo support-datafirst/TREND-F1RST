@@ -31,6 +31,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 .wx:first-child { border-left: 0; }
 .wx .k { font-size: 1.6vh; font-weight: 700; color: #7d8596; }
 .wx .v { font-size: 5.4vh; font-weight: 700; line-height: 1.25; }
+.wx.rain { -webkit-flex: 2; flex: 2; -webkit-justify-content: flex-start; justify-content: flex-start; }
+/* Step chart like Google's "โอกาสฝนตก": one bar per hour, % and time labelled every 3 hours. */
+.bars { -webkit-flex: 1; flex: 1; margin: 3.4vh 0 2.2vh; display: -webkit-flex; display: flex; }
+.bar { -webkit-flex: 1; flex: 1; position: relative; }
+.bar i { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(91,155,255,.18); border-top: .35vh solid #5b9bff; }
+.bar b, .bar em { position: absolute; left: 50%; width: 6em; margin-left: -3em; text-align: center; font-style: normal; white-space: nowrap; }
+.bar b { margin-bottom: .6vh; font-size: 1.6vh; color: #5b9bff; }
+.bar em { top: 100%; margin-top: .5vh; font-size: 1.4vh; color: #7d8596; }
 .wx .s { font-size: 1.5vh; line-height: 1.4; color: #aab1bf; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 #grid { position: absolute; top: 5vh; left: 40%; right: 0; bottom: 0; padding: 0 .8vw .8vw 0; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
 .cell { padding: .4vw; -webkit-transition: opacity .7s, -webkit-transform .7s; transition: opacity .7s, transform .7s; }
@@ -50,8 +58,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
   <div id="yt" class="slot"><div class="box" id="ytBox"></div></div>
   <div id="wx" class="slot"><div class="box">
     <div class="wx"><div class="k">อุณหภูมิ</div><div class="v" id="wxTemp">–</div><div class="s" id="wxSky"></div></div>
-    <div class="wx"><div class="k">ฝน</div><div class="v" id="wxRain">–</div><div class="s" id="wxRainS"></div></div>
-    <div class="wx"><div class="k">PM2.5 (มคก./ลบ.ม.)</div><div class="v" id="wxPm">–</div><div class="s" id="wxPmS"></div></div>
+    <div class="wx rain"><div class="k" id="wxRainK">โอกาสฝนตก</div><div class="bars" id="wxBars"></div></div>
+    <div class="wx"><div class="k">ฝุ่น PM2.5</div><div class="v" id="wxPm">–</div><div class="s" id="wxPmS"></div></div>
   </div></div>
   <div id="sl" class="slot"><div class="box"><div id="slide"></div><div class="empty" id="slEmpty">อัปโหลดรูป 16:9 ไว้ในโฟลเดอร์ slides/ บน GitHub</div></div></div>
 </div>
@@ -154,14 +162,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     if (w) {
       $('wxTemp').textContent = w.temp + '°';
       $('wxSky').textContent = w.sky + ' · รู้สึกเหมือน ' + w.feels + '°';
-      $('wxRain').textContent = w.rain.big;
-      $('wxRain').style.color = w.rain.wet ? '#5b9bff' : '';
-      $('wxRainS').textContent = w.rain.small;
+      var hrs = (w.rain && w.rain.hours) || [], bars = '';
+      for (var k = 0; k < hrs.length; k++) {
+        var pc = +hrs[k].p || 0;
+        bars += '<div class="bar"><i style="height:' + pc + '%"></i>' +
+          (k % 3 === 1 ? '<b style="bottom:' + pc + '%">' + pc + '%</b><em>' + hrs[k].t + '</em>' : '') + '</div>';
+      }
+      $('wxBars').innerHTML = bars;
+      $('wxRainK').textContent = 'โอกาสฝนตก' + (w.rain && w.rain.now ? ' · ตอนนี้ฝนตกอยู่' : '');
     }
     if (a) {
       $('wxPm').textContent = a.pm25;
       $('wxPm').style.color = a.color;
-      $('wxPmS').textContent = a.label + ' · ' + a.station + ' ' + a.time + ' น.';
+      $('wxPmS').textContent = a.label + ' · ' + a.station + ' ' + a.time;
     }
     slides = d.slides || [];
     slideMs = (d.slideSeconds || 10) * 1000;

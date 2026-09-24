@@ -9,12 +9,28 @@
 <!-- Plain ES5 + prefixed flexbox on purpose: Samsung/LG TV browsers run old engines (no CSS grid, no arrow functions). -->
 <style>
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; color: #f3f4f6; font-family: 'Noto Sans Thai', Tahoma, sans-serif; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; color: #f3f4f6; font-family: 'Noto Sans Thai', Tahoma, sans-serif; cursor: none; }
 #bar { height: 5vh; padding: 0 1.4vw; font-size: 2.1vh; color: #7d8596; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: space-between; justify-content: space-between; }
 #bar b { color: #f3f4f6; letter-spacing: .06em; }
 #bar .one { color: #38bdf8; }
 #updated.stale { color: #ff6b6b; }
-#grid { position: absolute; top: 5vh; left: 0; right: 0; bottom: 0; padding: 0 .8vw .8vw; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+/* Left 2 of 5 columns: YouTube (2 rows), weather (1 row), slides (2 rows). Right 3 columns: trends. */
+#side { position: absolute; top: 5vh; left: 0; bottom: 0; width: 40%; padding: 0 0 .8vw .8vw; }
+.slot { padding: .4vw; }
+.box { position: relative; height: 100%; overflow: hidden; border-radius: .6vw; background: #131722; }
+#yt, #sl { height: 40%; }
+#wx { height: 20%; }
+#ytBox iframe { width: 100%; height: 100%; border: 0; }
+.empty { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 2vh; color: #7d8596; font-size: 2vh; text-align: center; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; }
+#slide { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #000; background-position: center; background-repeat: no-repeat; background-size: contain; -webkit-transition: opacity .8s; transition: opacity .8s; }
+#slide.out { opacity: 0; }
+#wx .box { display: -webkit-flex; display: flex; }
+.wx { -webkit-flex: 1; flex: 1; min-width: 0; padding: 1.2vh 1vw; border-left: 1px solid #222838; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-justify-content: center; justify-content: center; }
+.wx:first-child { border-left: 0; }
+.wx .k { font-size: 1.6vh; font-weight: 700; color: #7d8596; }
+.wx .v { font-size: 5.4vh; font-weight: 700; line-height: 1.25; }
+.wx .s { font-size: 1.5vh; line-height: 1.4; color: #aab1bf; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+#grid { position: absolute; top: 5vh; left: 40%; right: 0; bottom: 0; padding: 0 .8vw .8vw 0; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
 .cell { padding: .4vw; -webkit-transition: opacity .7s, -webkit-transform .7s; transition: opacity .7s, transform .7s; }
 .cell.out { opacity: 0; -webkit-transform: scale(.95); transform: scale(.95); }
 .card { position: relative; height: 100%; overflow: hidden; border-radius: .6vw; border-top: .5vh solid #333; background-color: #131722; background-position: center; background-size: cover; padding: 1em 1.2em; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; }
@@ -28,19 +44,30 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 </head>
 <body>
 <div id="bar"><span><b>TREND F<span class="one">1</span>RST</b> &nbsp;เทรนด์ตอนนี้</span><span><span id="updated"></span> &nbsp; <b id="clock"></b></span></div>
+<div id="side">
+  <div id="yt" class="slot"><div class="box" id="ytBox"></div></div>
+  <div id="wx" class="slot"><div class="box">
+    <div class="wx"><div class="k">อุณหภูมิ</div><div class="v" id="wxTemp">–</div><div class="s" id="wxSky"></div></div>
+    <div class="wx"><div class="k">โอกาสฝน 3 ชม.</div><div class="v" id="wxRain">–</div><div class="s" id="wxHum"></div></div>
+    <div class="wx"><div class="k">PM2.5 (มคก./ลบ.ม.)</div><div class="v" id="wxPm">–</div><div class="s" id="wxPmS"></div></div>
+  </div></div>
+  <div id="sl" class="slot"><div class="box"><div id="slide"></div><div class="empty" id="slEmpty">อัปโหลดรูป 16:9 ไว้ในโฟลเดอร์ slides/ บน GitHub</div></div></div>
+</div>
 <div id="grid"></div>
 <script>
 (function () {
-  // ?rows=5&cols=5&speed=5&swap=3 (every `speed` seconds, `swap` cards change at once), same idea as trends.google.com/tv
+  // ?rows=5&cols=3&speed=5&swap=3 (every `speed` seconds, `swap` cards change at once), same idea as trends.google.com/tv
   var q = {};
   location.search.replace(/[?&](\w+)=(\d+)/g, function (_, k, v) { q[k] = +v; });
-  var ROWS = q.rows || 5, COLS = q.cols || 5, SWAP_MS = (q.speed || 5) * 1000, PER_TICK = q.swap || 3;
+  var ROWS = q.rows || 5, COLS = q.cols || 3, SWAP_MS = (q.speed || 5) * 1000, PER_TICK = q.swap || 3;
   var PLATFORMS = {
-    google: ['Google', '#5b9bff'], x: ['X', '#f5f5f5'], youtube: ['YouTube', '#ff4040'],
+    google: ['Google', '#5b9bff'], x: ['X', '#f5f5f5'], youtube: ['YouTube', '#ff4040'], ytnews: ['YouTube ข่าว', '#ff4040'],
+    pantip: ['Pantip', '#a78bfa'],
     wiki: ['Wikipedia', '#3cc9b4'], apple: ['Apple Music', '#ff5c8a'], hn: ['Hacker News', '#ff8a3d']
   };
 
-  var grid = document.getElementById('grid'), cells = [], order = [], items = [], updated = '', next = 0, turn = 0, i;
+  var grid = document.getElementById('grid'), cells = [], order = [], items = [], raw = '', updated = '', next = 0, turn = 0, i;
+  var ytSrc = null, slides = [], slideAt = 0, slideMs = 10000, shown = '';
   grid.style.fontSize = Math.min(5 / ROWS, 5 / COLS) + 'vh';
   for (i = 0; i < ROWS * COLS; i++) {
     var c = document.createElement('div');
@@ -98,6 +125,52 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     setTimeout(function () { fill(cell, it); cell.className = 'cell'; }, 700);
   }
 
+  function $(id) { return document.getElementById(id); }
+
+  // Left column: YouTube, weather/PM2.5, slides. All come from trends.json (fetch.js copies them from config.json).
+  function side(d) {
+    if (d.youtube !== ytSrc) { // reload the player only when the link changes, not on every refresh
+      ytSrc = d.youtube;
+      $('ytBox').innerHTML = ytSrc ? '' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
+      if (ytSrc) {
+        var f = document.createElement('iframe');
+        f.src = ytSrc;
+        f.setAttribute('allow', 'autoplay; encrypted-media');
+        $('ytBox').appendChild(f);
+      }
+    }
+    var w = d.weather, a = d.air;
+    if (w) {
+      $('wxTemp').textContent = w.temp + '°';
+      $('wxSky').textContent = w.sky + ' · รู้สึกเหมือน ' + w.feels + '°';
+      $('wxRain').textContent = w.rain + '%';
+      $('wxRain').style.color = w.rain >= 50 ? '#5b9bff' : '';
+      $('wxHum').textContent = 'ความชื้น ' + w.humidity + '%';
+    }
+    if (a) {
+      $('wxPm').textContent = a.pm25;
+      $('wxPm').style.color = a.color;
+      $('wxPmS').textContent = a.label + ' · ' + a.station + ' ' + a.time + ' น.';
+    }
+    slides = d.slides || [];
+    slideMs = (d.slideSeconds || 10) * 1000;
+    $('slEmpty').style.display = slides.length ? 'none' : '';
+    if (!slides.length) { $('slide').style.backgroundImage = 'none'; shown = ''; }
+  }
+
+  function nextSlide() {
+    if (slides.length) {
+      var src = slides[slideAt++ % slides.length], el = $('slide');
+      if (src !== shown) { // a single slide stays put instead of blinking
+        shown = src;
+        el.className = 'out';
+        setTimeout(function () { el.style.backgroundImage = 'url("' + src + '")'; el.className = ''; }, 800);
+        new Image().src = slides[slideAt % slides.length]; // preload the next one
+      }
+    }
+    setTimeout(nextSlide, slideMs);
+  }
+
   function pad(n) { return n < 10 ? '0' + n : n; }
   function hhmm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 
@@ -107,13 +180,16 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     x.onload = function () {
       var d;
       try { d = JSON.parse(x.responseText); } catch (e) { return; }
-      if (!d.items || !d.items.length || d.updated === updated) return;
+      if (!d.items || !d.items.length || x.responseText === raw) return;
       var first = !items.length;
+      raw = x.responseText;
       items = d.items;
       updated = d.updated;
+      side(d);
       if (first) {
         for (var k = 0; k < cells.length; k++) fill(cells[order[k]], items[k % items.length]);
         next = cells.length;
+        nextSlide();
       } else {
         next = 0; // new data: start again from the top-ranked items
       }

@@ -1,7 +1,10 @@
 // Pulls trends from several platforms and writes trends.json, mixed 75% TH / 25% international.
 // Run: node fetch.js   (YT_API_KEY env enables YouTube)   Self-check: node fetch.js --check
-const { writeFileSync } = require('node:fs');
+const { writeFileSync, readdirSync, readFileSync } = require('node:fs');
+const https = require('node:https');
+const tls = require('node:tls');
 const assert = require('node:assert');
+const config = require('./config.json'); // youtube link, slide timing, location for weather/PM2.5
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128 Safari/537.36';
 const PER_SOURCE = 20;
@@ -16,6 +19,13 @@ const decode = s => s
   .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
   .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(d))
   .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+// TV browsers have no emoji or "fancy" Unicode fonts (𝐏𝐔𝐁𝐆, ＦＵＬＬ, Ⓐ), which show up unreadable: map those to plain
+// letters and drop emoji. NFKC only on those ranges, because on Thai it would split ำ into ํ + า.
+const clean = (s = '') => s
+  .replace(/[\u{1D400}-\u{1D7FF}\uFF01-\uFF5E\u2460-\u24FF]/gu, c => c.normalize('NFKC'))
+  .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\uFE0F\u200D\u20E3]/gu, '')
+  .replace(/\s+/g, ' ').trim();
 
 const short = n => (n = +n) >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
 
@@ -35,11 +45,13 @@ async function x(path) {
     .map(([, t, n]) => ({ title: decode(t), metric: n ? short(n) + ' โพสต์' : '' }));
 }
 
-async function youtube(region) {
+// The trending chart is mostly music videos: keep at most 2 (category 10). category 25 = News & Politics.
+async function youtube(region, category) {
   const key = process.env.YT_API_KEY;
   if (!key) return [];
-  const j = await get(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=${region}&maxResults=${PER_SOURCE}&key=${key}`, true);
-  return j.items.map(v => ({
+  const j = await get(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=${region}${category ? '&videoCategoryId=' + category : ''}&maxResults=50&key=${key}`, true);
+  let music = 0;
+  return j.items.filter(v => v.snippet.categoryId !== '10' || music++ < 2).map(v => ({
     title: v.snippet.title, sub: v.snippet.channelTitle,
     metric: short(v.statistics.viewCount) + ' วิว', img: v.snippet.thumbnails.medium.url,
   }));
@@ -71,10 +83,64 @@ async function hn() {
   return items.map(i => ({ title: i.title, metric: i.score + ' points' }));
 }
 
+// Pantip Realtime (most-read topics right now), taken from the homepage's server-rendered data.
+async function pantip() {
+  const html = await get('https://pantip.com/');
+  const next = JSON.parse(html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)[1]);
+  return next.props.initialProps.pageProps.realtime.data.filter(t => t.title).map(t => ({
+    title: decode(t.title), metric: t.comments_count ? short(t.comments_count) + ' ความเห็น' : '', img: t.thumbnail_url || '',
+  }));
+}
+
+// Thai labels for WMO weather codes used by Open-Meteo.
+const sky = c => c === 0 ? 'ท้องฟ้าแจ่มใส' : c <= 2 ? 'มีเมฆบางส่วน' : c === 3 ? 'เมฆมาก' : c <= 48 ? 'มีหมอก'
+  : c <= 57 ? 'ฝนปรอย' : c <= 67 ? 'ฝนตก' : c <= 79 ? 'หิมะ' : c <= 82 ? 'ฝนตกเป็นช่วง' : c <= 86 ? 'หิมะ' : 'พายุฝนฟ้าคะนอง';
+
+async function weather({ lat, lon }) {
+  const j = await get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code&hourly=precipitation_probability&forecast_hours=3&timezone=Asia/Bangkok`, true);
+  const c = j.current;
+  return {
+    temp: Math.round(c.temperature_2m), feels: Math.round(c.apparent_temperature), humidity: c.relative_humidity_2m,
+    sky: sky(c.weather_code), rain: Math.max(0, ...j.hourly.precipitation_probability),
+  };
+}
+
+// Pollution Control Department AQI bands, indexed by Air4Thai's color_id (1..5).
+const AQI = [, ['ดีมาก', '#3bccff'], ['ดี', '#92d050'], ['ปานกลาง', '#ffd400'], ['เริ่มมีผลต่อสุขภาพ', '#ff9900'], ['มีผลต่อสุขภาพ', '#ff3b3b']];
+
+// air4thai.pcd.go.th sends its certificate without the Let's Encrypt intermediates, and Node won't fetch missing ones.
+// ponytail: bundled gen-Y RSA intermediates (YR1-3, Root YR cross-signed by ISRG Root X1, which Node trusts). If Air4Thai
+// fails with a certificate error, check the issuer with `openssl s_client` and add it from http://<issuer>.i.lencr.org/.
+const AIR4THAI_CA = [...tls.rootCertificates, readFileSync(__dirname + '/certs/letsencrypt-gen-y.pem', 'utf8')];
+const getJSON = (url, ca) => new Promise((ok, fail) => https.get(url, { ca, timeout: 15000 }, r => {
+  let s = '';
+  r.setEncoding('utf8').on('data', d => s += d).on('end', () => { try { ok(JSON.parse(s)); } catch (e) { fail(e); } });
+}).on('timeout', function () { this.destroy(new Error('timeout')); }).on('error', fail));
+
+// PM2.5 from the nearest Air4Thai station that is currently reporting.
+async function air({ lat, lon }) {
+  const j = await getJSON('https://air4thai.pcd.go.th/services/getNewAQI_JSON.php', AIR4THAI_CA);
+  const d2 = s => (s.lat - lat) ** 2 + ((s.long - lon) * Math.cos(lat * Math.PI / 180)) ** 2;
+  const s = j.stations.filter(s => +s.AQILast?.PM25?.value > 0).sort((a, b) => d2(a) - d2(b))[0];
+  const pm = s.AQILast.PM25, [label, color] = AQI[pm.color_id] || ['', '#aab1bf'];
+  return { pm25: +pm.value, label, color, station: s.nameTH.trim(), time: s.AQILast.time };
+}
+
+// Any YouTube link (watch, youtu.be, live, shorts, playlist) -> muted autoplay loop embed. Browsers block autoplay with sound.
+const YT_Q = 'autoplay=1&mute=1&controls=0&rel=0&playsinline=1&loop=1';
+function youtubeEmbed(link = '') {
+  const id = (link.match(/(?:[?&]v=|youtu\.be\/|\/live\/|\/shorts\/|\/embed\/)([\w-]{11})/) || [])[1];
+  const list = (link.match(/[?&]list=([\w-]+)/) || [])[1];
+  if (list) return `https://www.youtube.com/embed/${id || 'videoseries'}?list=${list}&${YT_Q}`;
+  return id ? `https://www.youtube.com/embed/${id}?playlist=${id}&${YT_Q}` : '';
+}
+
 const SOURCES = [
   ['google', 'TH', () => google('TH')],
   ['x', 'TH', () => x('thailand')],
-  ['youtube', 'TH', () => youtube('TH')],
+  ['youtube', 'TH', () => youtube('TH'), 15],
+  ['ytnews', 'TH', () => youtube('TH', 25), 8],
+  ['pantip', 'TH', pantip],
   ['wiki', 'TH', () => wiki('th'), 3],
   ['apple', 'TH', () => apple('th'), 2], // wiki and songs matter less: keep them few
   ['google', 'US', () => google('US')],
@@ -109,19 +175,40 @@ function mix(lists) {
 }
 
 async function main() {
-  const results = await Promise.allSettled(SOURCES.map(([, , fn]) => fn()));
+  let old = {};
+  try { old = require('./trends.json'); } catch {}
+  const [results, wx, aq] = await Promise.all([
+    Promise.allSettled(SOURCES.map(([, , fn]) => fn())),
+    weather(config.location).catch(e => console.error(`✗ weather: ${e.message}`)),
+    air(config.location).catch(e => console.error(`✗ air: ${e.message}`)),
+  ]);
   const lists = results.map((r, i) => {
     const [source, region, , limit = PER_SOURCE] = SOURCES[i];
     if (r.status === 'rejected') console.error(`✗ ${source} ${region}: ${r.reason.message}`);
     const items = r.status === 'fulfilled' ? r.value : [];
     if (r.status === 'fulfilled') console.log(`✓ ${source} ${region}: ${items.length}`);
-    return items.slice(0, limit).map((it, n) => ({ source, region, rank: n + 1, ...it }));
+    return items.slice(0, limit).map((it, n) => ({ source, region, rank: n + 1, ...it, title: clean(it.title), sub: clean(it.sub) }));
   });
   const items = mix(lists);
-  // Keep the last good file if nearly everything failed, so the TV never goes blank.
-  if (items.length < 30) throw new Error(`only ${items.length} items, not overwriting trends.json`);
-  writeFileSync(__dirname + '/trends.json', JSON.stringify({ updated: new Date().toISOString(), items }));
-  console.log(`wrote ${items.length} items`);
+  // Nearly everything failed: keep the previous trends and their timestamp, so the TV flags them as stale
+  // while weather, slides and the YouTube link still update.
+  const fresh = items.length >= 30;
+  if (!fresh) console.error(`✗ only ${items.length} items, keeping previous trends`);
+  let slides = [];
+  try {
+    slides = readdirSync(__dirname + '/slides').filter(f => /\.(jpe?g|png|webp|gif)$/i.test(f)).sort()
+      .map(f => 'slides/' + encodeURIComponent(f));
+  } catch {}
+  writeFileSync(__dirname + '/trends.json', JSON.stringify({
+    updated: fresh ? new Date().toISOString() : old.updated,
+    items: fresh ? items : old.items || items,
+    weather: wx || old.weather,
+    air: aq || old.air,
+    youtube: youtubeEmbed(config.youtube),
+    slides,
+    slideSeconds: config.slideSeconds || 10,
+  }));
+  console.log(`wrote ${items.length} items, ${slides.length} slides, youtube ${config.youtube ? 'on' : 'off'}`);
 }
 
 function check() {
@@ -134,6 +221,13 @@ function check() {
   const few = mix([mk('google', 'TH', 10), mk('apple', 'TH', 2)]);
   assert.deepEqual(few.map((it, i) => it.source === 'apple' ? i : -1).filter(i => i >= 0), [3, 9], 'short list spreads out');
   assert.deepEqual(mix([[{ region: 'TH', title: 'หี' }, { region: 'TH', title: 'หีบเพลง' }, { region: 'TH', title: 'Pornhub' }]]).map(i => i.title), ['หีบเพลง'], 'block list');
+  assert.equal(youtubeEmbed('https://youtu.be/dQw4w9WgXcQ?si=abc'), `https://www.youtube.com/embed/dQw4w9WgXcQ?playlist=dQw4w9WgXcQ&${YT_Q}`);
+  assert.equal(youtubeEmbed('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLx_1'), `https://www.youtube.com/embed/dQw4w9WgXcQ?list=PLx_1&${YT_Q}`);
+  assert.equal(youtubeEmbed('https://www.youtube.com/playlist?list=PLx_1'), `https://www.youtube.com/embed/videoseries?list=PLx_1&${YT_Q}`);
+  assert.equal(youtubeEmbed('https://www.youtube.com/live/abcdefghijk'), `https://www.youtube.com/embed/abcdefghijk?playlist=abcdefghijk&${YT_Q}`);
+  assert.equal(youtubeEmbed('not a link'), '');
+  assert.equal(clean('🔴Live สด! 𝐏𝐔𝐁𝐆 𝐓𝐇𝐀𝐈𝐋𝐀𝐍𝐃 𝟐𝟎𝟐𝟔 🇹🇭 ❤️'), 'Live สด! PUBG THAILAND 2026');
+  assert.equal(clean('กำลังมาแรง'), 'กำลังมาแรง', 'Thai sara am must survive');
   console.log('check done');
 }
 

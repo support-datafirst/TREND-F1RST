@@ -1,7 +1,7 @@
 name: update trends
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '7,37 * * * *' # off the :00/:30 peak, where GitHub delays or drops scheduled runs
   workflow_dispatch:
 permissions:
   contents: write

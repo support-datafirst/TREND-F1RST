@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TREND F1RST</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;700&display=swap" rel="stylesheet">
+<!-- Plain ES5 + prefixed flexbox on purpose: Samsung/LG TV browsers run old engines (no CSS grid, no arrow functions). -->
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; color: #f3f4f6; font-family: 'Noto Sans Thai', Tahoma, sans-serif; }
+#bar { height: 5vh; padding: 0 1.4vw; font-size: 2.1vh; color: #7d8596; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: space-between; justify-content: space-between; }
+#bar b { color: #f3f4f6; letter-spacing: .06em; }
+#bar .one { color: #38bdf8; }
+#updated.stale { color: #ff6b6b; }
+#grid { position: absolute; top: 5vh; left: 0; right: 0; bottom: 0; padding: 0 .8vw .8vw; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+.cell { padding: .4vw; -webkit-transition: opacity .7s, -webkit-transform .7s; transition: opacity .7s, transform .7s; }
+.cell.out { opacity: 0; -webkit-transform: scale(.95); transform: scale(.95); }
+.card { position: relative; height: 100%; overflow: hidden; border-radius: .6vw; border-top: .5vh solid #333; background-color: #131722; background-position: center; background-size: cover; padding: 1em 1.2em; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; }
+.top, .sub, .metric { -webkit-flex-shrink: 0; flex-shrink: 0; }
+.top { font-size: 1.45em; font-weight: 700; letter-spacing: .03em; margin-bottom: .5em; display: -webkit-flex; display: flex; -webkit-justify-content: space-between; justify-content: space-between; }
+.rank { color: #fff; opacity: .45; }
+.title { font-weight: 700; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
+.sub { margin-top: .35em; font-size: 1.4em; line-height: 1.35; color: #aab1bf; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+.metric { margin-top: auto; padding-top: .3em; font-size: 1.6em; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="bar"><span><b>TREND F<span class="one">1</span>RST</b> &nbsp;เทรนด์ตอนนี้</span><span><span id="updated"></span> &nbsp; <b id="clock"></b></span></div>
+<div id="grid"></div>
+<script>
+(function () {
+  // ?rows=5&cols=6&speed=3 (seconds per card swap), same idea as trends.google.com/tv
+  var q = {};
+  location.search.replace(/[?&](\w+)=(\d+)/g, function (_, k, v) { q[k] = +v; });
+  var ROWS = q.rows || 5, COLS = q.cols || 6, SWAP_MS = (q.speed || 3) * 1000;
+  var PLATFORMS = {
+    google: ['Google', '#5b9bff'], x: ['X', '#f5f5f5'], youtube: ['YouTube', '#ff4040'],
+    wiki: ['Wikipedia', '#3cc9b4'], apple: ['Apple Music', '#ff5c8a'], hn: ['Hacker News', '#ff8a3d']
+  };
+
+  var grid = document.getElementById('grid'), cells = [], order = [], items = [], updated = '', next = 0, turn = 0, i;
+  grid.style.fontSize = Math.min(5 / ROWS, 6 / COLS) + 'vh';
+  for (i = 0; i < ROWS * COLS; i++) {
+    var c = document.createElement('div');
+    c.className = 'cell';
+    c.style.width = 100 / COLS + '%';
+    c.style.height = 100 / ROWS + '%';
+    c.innerHTML = '<div class="card"><div class="top"><span class="src"></span><span class="rank"></span></div>' +
+      '<div class="title"></div><div class="sub"></div><div class="metric"></div></div>';
+    grid.appendChild(c);
+    cells.push(c);
+    order.push(i);
+  }
+  // Cells are replaced in one fixed shuffled order, so the screen always shows the latest N items of the
+  // list, which fetch.js already mixed 3 TH : 1 intl. That keeps the 75/25 ratio on screen at all times.
+  for (i = order.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1)), t = order[i];
+    order[i] = order[j]; order[j] = t;
+  }
+
+  function fill(cell, it) {
+    var p = PLATFORMS[it.source] || [it.source, '#888'], card = cell.firstChild;
+    card.style.borderTopColor = p[1];
+    card.style.backgroundImage = it.img
+      ? 'linear-gradient(rgba(19,23,34,.7), rgba(19,23,34,.94)), url("' + it.img.replace(/"/g, '%22') + '")' : 'none';
+    card.querySelector('.src').style.color = p[1];
+    card.querySelector('.src').textContent = p[0] + ' · ' + it.region;
+    card.querySelector('.rank').textContent = '#' + it.rank;
+    card.querySelector('.sub').textContent = it.sub || '';
+    card.querySelector('.metric').style.color = p[1];
+    card.querySelector('.metric').textContent = it.metric || '';
+    fit(card.querySelector('.title'), it.title);
+  }
+
+  // Shrink the title until it fits the space left in the card (no half-cut lines, no hashtag overflowing sideways).
+  // Compared in lines, not pixels: Thai glyphs poke a few px above the line box, so scrollHeight always exceeds clientHeight.
+  function fit(el, text) {
+    var size = text.length <= 12 ? 3.6 : text.length <= 24 ? 3 : 2.6, lh, room;
+    el.textContent = text;
+    el.style.webkitLineClamp = 'none';
+    el.style.wordWrap = 'normal';
+    do {
+      el.style.fontSize = size + 'em';
+      lh = parseFloat(getComputedStyle(el).fontSize) * 1.35;
+      room = Math.floor(el.clientHeight / lh + 0.1);
+      size -= 0.2;
+    } while (size > 1.79 && (Math.round(el.scrollHeight / lh) > room || el.scrollWidth > el.clientWidth + 1));
+    el.style.wordWrap = 'break-word';
+    el.style.webkitLineClamp = Math.max(1, room);
+  }
+
+  function swap() {
+    if (!items.length) return;
+    var cell = cells[order[turn++ % cells.length]], it = items[next++ % items.length];
+    cell.className = 'cell out';
+    setTimeout(function () { fill(cell, it); cell.className = 'cell'; }, 700);
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : n; }
+  function hhmm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+  function load() {
+    var x = new XMLHttpRequest();
+    x.open('GET', 'trends.json?t=' + Date.now());
+    x.onload = function () {
+      var d;
+      try { d = JSON.parse(x.responseText); } catch (e) { return; }
+      if (!d.items || !d.items.length || d.updated === updated) return;
+      var first = !items.length;
+      items = d.items;
+      updated = d.updated;
+      if (first) {
+        for (var k = 0; k < cells.length; k++) fill(cells[order[k]], items[k % items.length]);
+        next = cells.length;
+      } else {
+        next = 0; // new data: start again from the top-ranked items
+      }
+      tick();
+    };
+    x.send();
+  }
+
+  function tick() {
+    var now = new Date(), el = document.getElementById('updated');
+    document.getElementById('clock').textContent = hhmm(now);
+    if (!updated) return;
+    el.textContent = 'อัปเดต ' + hhmm(new Date(updated));
+    el.className = now - new Date(updated) > 2 * 36e5 ? 'stale' : ''; // red = fetch job stopped
+  }
+
+  load();
+  tick();
+  setInterval(swap, SWAP_MS);
+  setInterval(tick, 10000);
+  setInterval(load, 10 * 60000);
+  setTimeout(function () { location.reload(); }, 6 * 36e5); // TV browsers leak memory over days
+})();
+</script>
+</body>
+</html>

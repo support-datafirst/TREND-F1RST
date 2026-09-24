@@ -127,6 +127,24 @@ async function air({ lat, lon }) {
   return { pm25: +pm.value, label, color, station: s.nameTH.trim().replace(/^สำนักงาน/, '').replace(/\s*กรุงเทพฯ$/, ''), time: s.AQILast.time };
 }
 
+// Thai PM2.5 bands by value (µg/m³), for sensors that only report a number. Index into AQI.
+const pmBand = v => v <= 15 ? 1 : v <= 25 ? 2 : v <= 37.5 ? 3 : v <= 75 ? 4 : 5;
+
+// Office air purifiers: one entry per room. A device more than 6 h behind the newest reading has stopped
+// reporting (compared to the newest, not to now, because the API's timestamps carry no timezone).
+function officeRooms(data) {
+  const newest = Math.max(...data.map(d => Date.parse(d.timestamp)));
+  return data.filter(d => newest - Date.parse(d.timestamp) < 6 * 36e5).map(d => {
+    const [room, place = ''] = d.airPurifierName.split(' - ');
+    const [label, color] = AQI[pmBand(d.pM25)];
+    return { room, place: place.replace(/\s*Floor\s*/i, ' · ชั้น '), pm25: Math.round(d.pM25), temp: +(+d.temp).toFixed(1), humidity: Math.round(d.humidity), label, color };
+  }).sort((a, b) => a.place.localeCompare(b.place, 'en', { numeric: true }));
+}
+
+async function office() {
+  return officeRooms((await get('https://api.fareastfamelineddb.com/api/AirPurifiers/GetLatestAirPurifier', true)).data);
+}
+
 // Any YouTube link (watch, youtu.be, live, shorts, playlist) -> muted autoplay loop embed. Browsers block autoplay with sound.
 const YT_Q = 'autoplay=1&mute=1&controls=0&rel=0&playsinline=1&loop=1';
 function youtubeEmbed(link = '') {
@@ -178,10 +196,11 @@ function mix(lists) {
 async function main() {
   let old = {};
   try { old = require('./trends.json'); } catch {}
-  const [results, wx, aq] = await Promise.all([
+  const [results, wx, aq, rooms] = await Promise.all([
     Promise.allSettled(SOURCES.map(([, , fn]) => fn())),
     weather(config.location).catch(e => console.error(`✗ weather: ${e.message}`)),
     air(config.location).catch(e => console.error(`✗ air: ${e.message}`)),
+    office().catch(e => console.error(`✗ office: ${e.message}`)),
   ]);
   const lists = results.map((r, i) => {
     const [source, region, , limit = PER_SOURCE] = SOURCES[i];
@@ -205,6 +224,7 @@ async function main() {
     items: fresh ? items : old.items || items,
     weather: wx || old.weather,
     air: aq || old.air,
+    office: rooms || old.office || [],
     youtube: youtubeEmbed(config.youtube),
     slides,
     slideSeconds: config.slideSeconds || 10,
@@ -229,6 +249,13 @@ function check() {
   assert.equal(youtubeEmbed('not a link'), '');
   assert.equal(clean('🔴Live สด! 𝐏𝐔𝐁𝐆 𝐓𝐇𝐀𝐈𝐋𝐀𝐍𝐃 𝟐𝟎𝟐𝟔 🇹🇭 ❤️'), 'Live สด! PUBG THAILAND 2026');
   assert.equal(clean('กำลังมาแรง'), 'กำลังมาแรง', 'Thai sara am must survive');
+  assert.deepEqual([2, 20, 30, 50, 100].map(pmBand), [1, 2, 3, 4, 5], 'Thai PM2.5 bands');
+  const rooms = officeRooms([
+    { airPurifierName: 'Pizza Room - FEFLDDB Floor 5', timestamp: '2026-09-24T15:39:42', pM25: 4, temp: 25.1, humidity: 82 },
+    { airPurifierName: 'Amazon - FEFLDDB Floor 4', timestamp: '2026-08-05T04:40:42', pM25: 4, temp: 27.7, humidity: 60 },
+    { airPurifierName: 'Data Lab - Data First Floor 3', timestamp: '2026-09-24T15:02:14', pM25: 30, temp: 25.3, humidity: 75 },
+  ]);
+  assert.deepEqual(rooms.map(r => [r.room, r.place, r.label]), [['Data Lab', 'Data First · ชั้น 3', 'ปานกลาง'], ['Pizza Room', 'FEFLDDB · ชั้น 5', 'ดีมาก']], 'office rooms: stale dropped, sorted');
   console.log('check done');
 }
 

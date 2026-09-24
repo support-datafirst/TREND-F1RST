@@ -20,9 +20,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 .box { position: relative; height: 100%; overflow: hidden; border-radius: .6vw; background: #131722; }
 #yt, #sl { height: 40%; }
 #wx { height: 20%; }
-#ytBox iframe { width: 100%; height: 100%; border: 0; }
+/* 16:9 player as wide as the box and centred, so the video covers it (top/bottom trimmed) instead of showing side bars. */
+#ytBox .fill { position: absolute; left: 0; right: 0; top: 50%; padding-top: 56.25%; -webkit-transform: translateY(-50%); transform: translateY(-50%); }
+#ytBox iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 .empty { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 2vh; color: #7d8596; font-size: 2vh; text-align: center; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; }
-#slide { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #000; background-position: center; background-repeat: no-repeat; background-size: contain; -webkit-transition: opacity .8s; transition: opacity .8s; }
+#slide { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #000; background-position: center; background-repeat: no-repeat; background-size: cover; -webkit-transition: opacity .8s; transition: opacity .8s; }
 #slide.out { opacity: 0; }
 #wx .box { display: -webkit-flex; display: flex; }
 .wx { -webkit-flex: 1; flex: 1; min-width: 0; padding: 1.2vh 1vw; border-left: 1px solid #222838; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-justify-content: center; justify-content: center; }
@@ -140,12 +142,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
   function side(d) {
     if (d.youtube !== ytSrc) { // reload the player only when the link changes, not on every refresh
       ytSrc = d.youtube;
-      $('ytBox').innerHTML = ytSrc ? '' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
+      $('ytBox').innerHTML = ytSrc ? '<div class="fill"></div>' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
       if (ytSrc) {
         var f = document.createElement('iframe');
         f.src = ytSrc;
         f.setAttribute('allow', 'autoplay; encrypted-media');
-        $('ytBox').appendChild(f);
+        $('ytBox').firstChild.appendChild(f);
       }
     }
     var w = d.weather, a = d.air;

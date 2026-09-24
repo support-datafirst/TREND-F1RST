@@ -31,17 +31,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 <div id="grid"></div>
 <script>
 (function () {
-  // ?rows=5&cols=6&speed=3 (seconds per card swap), same idea as trends.google.com/tv
+  // ?rows=5&cols=5&speed=5&swap=3 (every `speed` seconds, `swap` cards change at once), same idea as trends.google.com/tv
   var q = {};
   location.search.replace(/[?&](\w+)=(\d+)/g, function (_, k, v) { q[k] = +v; });
-  var ROWS = q.rows || 5, COLS = q.cols || 6, SWAP_MS = (q.speed || 3) * 1000;
+  var ROWS = q.rows || 5, COLS = q.cols || 5, SWAP_MS = (q.speed || 5) * 1000, PER_TICK = q.swap || 3;
   var PLATFORMS = {
     google: ['Google', '#5b9bff'], x: ['X', '#f5f5f5'], youtube: ['YouTube', '#ff4040'],
     wiki: ['Wikipedia', '#3cc9b4'], apple: ['Apple Music', '#ff5c8a'], hn: ['Hacker News', '#ff8a3d']
   };
 
   var grid = document.getElementById('grid'), cells = [], order = [], items = [], updated = '', next = 0, turn = 0, i;
-  grid.style.fontSize = Math.min(5 / ROWS, 6 / COLS) + 'vh';
+  grid.style.fontSize = Math.min(5 / ROWS, 5 / COLS) + 'vh';
   for (i = 0; i < ROWS * COLS; i++) {
     var c = document.createElement('div');
     c.className = 'cell';
@@ -132,7 +132,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 
   load();
   tick();
-  setInterval(swap, SWAP_MS);
+  setInterval(function () { for (var n = 0; n < PER_TICK; n++) swap(); }, SWAP_MS);
   setInterval(tick, 10000);
   setInterval(load, 10 * 60000);
   setTimeout(function () { location.reload(); }, 6 * 36e5); // TV browsers leak memory over days

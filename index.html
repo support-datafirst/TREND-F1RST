@@ -32,7 +32,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 .wx .k { font-size: 1.6vh; font-weight: 700; color: #7d8596; }
 .wx .v { font-size: 5.4vh; font-weight: 700; line-height: 1.25; }
 .wx.rain { -webkit-flex: 2; flex: 2; -webkit-justify-content: flex-start; justify-content: flex-start; }
-/* Step chart like Google's "โอกาสฝนตก": one bar per hour, % and time labelled every 3 hours. */
+/* Step chart like Google's "โอกาสฝนตก": one bar per hour (next 6 h), each labelled with % and time. */
 .bars { -webkit-flex: 1; flex: 1; margin: 3.4vh 0 2.2vh; display: -webkit-flex; display: flex; }
 .bar { -webkit-flex: 1; flex: 1; position: relative; }
 .bar i { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(91,155,255,.18); border-top: .35vh solid #5b9bff; }
@@ -166,7 +166,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
       for (var k = 0; k < hrs.length; k++) {
         var pc = +hrs[k].p || 0;
         bars += '<div class="bar"><i style="height:' + pc + '%"></i>' +
-          (k % 3 === 1 ? '<b style="bottom:' + pc + '%">' + pc + '%</b><em>' + hrs[k].t + '</em>' : '') + '</div>';
+          '<b style="bottom:' + pc + '%">' + pc + '%</b><em>' + hrs[k].t + '</em></div>';
       }
       $('wxBars').innerHTML = bars;
       $('wxRainK').textContent = 'โอกาสฝนตก' + (w.rain && w.rain.now ? ' · ตอนนี้ฝนตกอยู่' : '');

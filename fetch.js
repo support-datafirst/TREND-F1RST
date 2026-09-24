@@ -97,11 +97,11 @@ const sky = c => c === 0 ? 'ท้องฟ้าแจ่มใส' : c <= 2 ? 
   : c <= 57 ? 'ฝนปรอย' : c <= 67 ? 'ฝนตก' : c <= 79 ? 'หิมะ' : c <= 82 ? 'ฝนตกเป็นช่วง' : c <= 86 ? 'หิมะ' : 'พายุฝนฟ้าคะนอง';
 
 async function weather({ lat, lon }) {
-  const j = await get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,precipitation&hourly=precipitation_probability&forecast_hours=12&timezone=Asia/Bangkok`, true);
+  const j = await get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,precipitation&hourly=precipitation_probability&forecast_hours=6&timezone=Asia/Bangkok`, true);
   const c = j.current, h = j.hourly;
   return {
     temp: Math.round(c.temperature_2m), feels: Math.round(c.apparent_temperature), sky: sky(c.weather_code),
-    // Hourly chance of rain for the next 12 h (local time, from the current hour), drawn as a step chart on the TV.
+    // Hourly chance of rain for the next 6 h (local time, from the current hour), drawn as a step chart on the TV.
     rain: { now: c.precipitation > 0, hours: h.time.map((t, i) => ({ t: t.slice(11, 16), p: h.precipitation_probability[i] ?? 0 })) },
   };
 }

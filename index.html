@@ -34,7 +34,16 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 #wx .box { -webkit-transition: opacity .6s; transition: opacity .6s; }
 #wx .box.out { opacity: 0; }
 .page { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: -webkit-flex; display: flex; }
-.wx .v.name { font-size: 2.6vh; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+/* Office page: two rooms side by side, name on top, PM2.5 / temp / humidity in a row below. */
+.room { -webkit-flex: 1; flex: 1; min-width: 0; padding: 1.4vh 1.1vw; border-left: 1px solid #222838; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; }
+.room:first-child { border-left: 0; }
+.rn { font-size: 2vh; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp { font-size: 1.4vh; line-height: 1.4; color: #7d8596; }
+.rm { margin-top: auto; display: -webkit-flex; display: flex; }
+.rm > div { -webkit-flex: 1; flex: 1; min-width: 0; }
+.rm .k { font-size: 1.3vh; line-height: 1.4; font-weight: 700; color: #7d8596; }
+.rm .v { font-size: 3vh; line-height: 1.25; font-weight: 700; white-space: nowrap; }
+.rm small { margin-left: .3vw; font-size: 1.3vh; }
 .wx { -webkit-flex: 1; flex: 1; min-width: 0; padding: 1.2vh 1vw; border-left: 1px solid #222838; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-justify-content: center; justify-content: center; }
 .wx:first-child { border-left: 0; }
 .wx .k { font-size: 1.6vh; font-weight: 700; color: #7d8596; }
@@ -70,12 +79,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
       <div class="wx rain"><div class="k" id="wxRainK">โอกาสฝนตก</div><div class="bars" id="wxBars"></div></div>
       <div class="wx"><div class="k">ฝุ่น PM2.5 ภายนอก</div><div class="v" id="wxPm">–</div><div class="s" id="wxPmS"></div></div>
     </div>
-    <div class="page" id="wxRoom" style="display:none">
-      <div class="wx"><div class="k">ในออฟฟิศ</div><div class="v name" id="rmName"></div><div class="s" id="rmPlace"></div></div>
-      <div class="wx"><div class="k">ฝุ่น PM2.5</div><div class="v" id="rmPm"></div><div class="s" id="rmPmS"></div></div>
-      <div class="wx"><div class="k">อุณหภูมิ</div><div class="v" id="rmTemp"></div></div>
-      <div class="wx"><div class="k">ความชื้น</div><div class="v" id="rmHum"></div></div>
-    </div>
+    <div class="page" id="wxRoom" style="display:none"></div>
   </div></div>
   <div id="sl" class="slot"><div class="box"><div id="slide"></div><div id="dots"></div><div class="empty" id="slEmpty">อัปโหลดรูป 16:9 ไว้ในโฟลเดอร์ slides/ บน GitHub</div></div></div>
 </div>
@@ -192,12 +196,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
       $('wxPm').style.color = a.color;
       $('wxPmS').textContent = a.label + ' · ' + a.station + ' ' + a.time;
     }
-    // Weather pages: null = outdoor, otherwise an office room. Outdoor comes back after every 2 rooms.
+    // Weather pages: null = outdoor, otherwise a pair of office rooms (an odd last room pairs with the first).
+    // Outdoor comes back after every 2 room pages.
     var rooms = d.office || [];
-    wxPages = [];
-    for (var r = 0; r < rooms.length || !wxPages.length; r++) {
-      if (r % 2 === 0) wxPages.push(null);
-      if (rooms[r]) wxPages.push(rooms[r]);
+    wxPages = [null];
+    for (var r = 0; r < rooms.length; r += 2) {
+      if (r && r % 4 === 0) wxPages.push(null);
+      wxPages.push([rooms[r], rooms[r + 1] || (rooms.length > 2 ? rooms[0] : null)]);
     }
     slides = d.slides || [];
     slideMs = (d.slideSeconds || 10) * 1000;
@@ -210,6 +215,25 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     if (!slides.length) { $('slide').style.backgroundImage = 'none'; shown = ''; }
   }
 
+  var ROOM = '<div class="room"><div class="rn"></div><div class="rp"></div><div class="rm">' +
+    '<div><div class="k">PM2.5</div><div class="v"><span class="pm"></span><small class="band"></small></div></div>' +
+    '<div><div class="k">อุณหภูมิ</div><div class="v tp"></div></div>' +
+    '<div><div class="k">ความชื้น</div><div class="v hm"></div></div></div></div>';
+  $('wxRoom').innerHTML = ROOM + ROOM;
+
+  function fillRoom(el, r) {
+    el.style.display = r ? '' : 'none';
+    if (!r) return;
+    el.querySelector('.rn').textContent = r.room;
+    el.querySelector('.rp').textContent = r.place;
+    el.querySelector('.pm').textContent = r.pm25;
+    el.querySelector('.pm').style.color = r.color;
+    el.querySelector('.band').textContent = r.label;
+    el.querySelector('.band').style.color = r.color;
+    el.querySelector('.tp').textContent = r.temp + '°';
+    el.querySelector('.hm').textContent = r.humidity + '%';
+  }
+
   function nextWx() {
     if (wxPages.length > 1) {
       var pg = wxPages[wxAt++ % wxPages.length], box = $('wxBox');
@@ -217,15 +241,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
       setTimeout(function () {
         $('wxOut').style.display = pg ? 'none' : '';
         $('wxRoom').style.display = pg ? '' : 'none';
-        if (pg) {
-          $('rmName').textContent = pg.room;
-          $('rmPlace').textContent = pg.place;
-          $('rmPm').textContent = pg.pm25;
-          $('rmPm').style.color = pg.color;
-          $('rmPmS').textContent = pg.label;
-          $('rmTemp').textContent = pg.temp + '°';
-          $('rmHum').textContent = pg.humidity + '%';
-        }
+        for (var k = 0, el = $('wxRoom').childNodes; pg && k < 2; k++) fillRoom(el[k], pg[k]);
         box.className = 'box';
       }, 600);
     }

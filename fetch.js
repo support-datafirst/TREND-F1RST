@@ -75,14 +75,14 @@ const SOURCES = [
   ['google', 'TH', () => google('TH')],
   ['x', 'TH', () => x('thailand')],
   ['youtube', 'TH', () => youtube('TH')],
-  ['wiki', 'TH', () => wiki('th')],
-  ['apple', 'TH', () => apple('th'), 5], // songs matter less: keep them few
+  ['wiki', 'TH', () => wiki('th'), 3],
+  ['apple', 'TH', () => apple('th'), 2], // wiki and songs matter less: keep them few
   ['google', 'US', () => google('US')],
   ['google', 'GB', () => google('GB')],
   ['x', 'US', () => x('united-states')],
   ['youtube', 'US', () => youtube('US')],
-  ['wiki', 'EN', () => wiki('en')],
-  ['apple', 'US', () => apple('us'), 5],
+  ['wiki', 'EN', () => wiki('en'), 3],
+  ['apple', 'US', () => apple('us'), 2],
   ['hn', 'TECH', hn],
 ];
 

@@ -24,8 +24,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 #ytBox .fill { position: absolute; left: 0; right: 0; top: 50%; padding-top: 56.25%; -webkit-transform: translateY(-50%); transform: translateY(-50%); }
 #ytBox iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 .empty { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 2vh; color: #7d8596; font-size: 2vh; text-align: center; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; }
-#slide { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #000; background-position: center; background-repeat: no-repeat; background-size: contain; -webkit-transition: opacity .8s; transition: opacity .8s; }
+#slide { position: absolute; top: 0; left: 0; right: 2.4vw; bottom: 0; background-position: left center; background-repeat: no-repeat; background-size: contain; -webkit-transition: opacity .8s; transition: opacity .8s; }
 #slide.out { opacity: 0; }
+/* Slide-position dots in the strip a 16:9 image leaves free on the right of the box. */
+#dots { position: absolute; top: 0; right: 0; bottom: 0; width: 2.4vw; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; align-items: center; }
+#dots i { width: 1vh; height: 1vh; margin: .5vh 0; border-radius: 50%; background: #3a4150; -webkit-transition: background .4s; transition: background .4s; }
+#dots i.on { background: #facc15; }
 #wx .box { display: -webkit-flex; display: flex; }
 .wx { -webkit-flex: 1; flex: 1; min-width: 0; padding: 1.2vh 1vw; border-left: 1px solid #222838; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-justify-content: center; justify-content: center; }
 .wx:first-child { border-left: 0; }
@@ -61,7 +65,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     <div class="wx rain"><div class="k" id="wxRainK">โอกาสฝนตก</div><div class="bars" id="wxBars"></div></div>
     <div class="wx"><div class="k">ฝุ่น PM2.5</div><div class="v" id="wxPm">–</div><div class="s" id="wxPmS"></div></div>
   </div></div>
-  <div id="sl" class="slot"><div class="box"><div id="slide"></div><div class="empty" id="slEmpty">อัปโหลดรูป 16:9 ไว้ในโฟลเดอร์ slides/ บน GitHub</div></div></div>
+  <div id="sl" class="slot"><div class="box"><div id="slide"></div><div id="dots"></div><div class="empty" id="slEmpty">อัปโหลดรูป 16:9 ไว้ในโฟลเดอร์ slides/ บน GitHub</div></div></div>
 </div>
 <div id="grid"></div>
 <script>
@@ -179,16 +183,25 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     slides = d.slides || [];
     slideMs = (d.slideSeconds || 10) * 1000;
     $('slEmpty').style.display = slides.length ? 'none' : '';
+    var n = slides.length > 1 ? slides.length : 0, dots = '';
+    if ($('dots').childNodes.length !== n) {
+      for (var k = 0; k < n; k++) dots += '<i></i>';
+      $('dots').innerHTML = dots;
+    }
     if (!slides.length) { $('slide').style.backgroundImage = 'none'; shown = ''; }
   }
 
   function nextSlide() {
     if (slides.length) {
-      var src = slides[slideAt++ % slides.length], el = $('slide');
+      var at = slideAt++ % slides.length, src = slides[at], el = $('slide');
       if (src !== shown) { // a single slide stays put instead of blinking
         shown = src;
         el.className = 'out';
-        setTimeout(function () { el.style.backgroundImage = 'url("' + src + '")'; el.className = ''; }, 800);
+        setTimeout(function () {
+          el.style.backgroundImage = 'url("' + src + '")';
+          el.className = '';
+          for (var d = $('dots').childNodes, k = 0; k < d.length; k++) d[k].className = k === at ? 'on' : '';
+        }, 800);
         new Image().src = slides[slideAt % slides.length]; // preload the next one
       }
     }

@@ -40,12 +40,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 .rn { font-size: 2vh; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rp { font-size: 1.4vh; line-height: 1.4; color: #7d8596; }
 .rm { margin-top: auto; display: -webkit-flex; display: flex; -webkit-align-items: flex-end; align-items: flex-end; }
-.rm > div { -webkit-flex: 1.2; flex: 1.2; min-width: 0; }
-.rm > div:last-child { -webkit-flex: .8; flex: .8; }
-.rm .k { font-size: 1.3vh; line-height: 1.4; font-weight: 700; color: #7d8596; }
+.rm > div { -webkit-flex: 1; flex: 1; min-width: 0; }
+.rh { display: -webkit-flex; display: flex; }
+.rt { -webkit-flex: 1; flex: 1; min-width: 0; }
+/* Humidity is secondary: small, top right. PM2.5 and temperature carry the page. */
+.hmw { margin-left: .6vw; text-align: right; }
+.hmw .hm { font-size: 2vh; line-height: 1.3; font-weight: 700; color: #aab1bf; }
+.room .k { font-size: 1.3vh; line-height: 1.4; font-weight: 700; color: #7d8596; }
 .rm .v { font-size: 3.8vh; line-height: 1.2; font-weight: 700; white-space: nowrap; }
-/* Humidity is secondary: PM2.5 and temperature carry the page. */
-.rm .v.hm { font-size: 2vh; line-height: 1.5; color: #aab1bf; }
 .rm small { margin-left: .3vw; font-size: 1.3vh; }
 .wx { -webkit-flex: 1; flex: 1; min-width: 0; padding: 1.2vh 1vw; border-left: 1px solid #222838; display: -webkit-flex; display: flex; -webkit-flex-direction: column; flex-direction: column; -webkit-justify-content: center; justify-content: center; }
 .wx:first-child { border-left: 0; }
@@ -218,10 +220,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     if (!slides.length) { $('slide').style.backgroundImage = 'none'; shown = ''; }
   }
 
-  var ROOM = '<div class="room"><div class="rn"></div><div class="rp"></div><div class="rm">' +
+  var ROOM = '<div class="room"><div class="rh"><div class="rt"><div class="rn"></div><div class="rp"></div></div>' +
+    '<div class="hmw"><div class="k">ความชื้น</div><div class="hm"></div></div></div><div class="rm">' +
     '<div><div class="k">PM2.5</div><div class="v"><span class="pm"></span><small class="band"></small></div></div>' +
-    '<div><div class="k">อุณหภูมิ</div><div class="v tp"></div></div>' +
-    '<div><div class="k">ความชื้น</div><div class="v hm"></div></div></div></div>';
+    '<div><div class="k">อุณหภูมิ</div><div class="v tp"></div></div></div></div>';
   $('wxRoom').innerHTML = ROOM + ROOM;
 
   function fillRoom(el, r) {

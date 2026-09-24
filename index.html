@@ -210,7 +210,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
   tick();
   setInterval(function () { for (var n = 0; n < PER_TICK; n++) swap(); }, SWAP_MS);
   setInterval(tick, 10000);
-  setInterval(load, 2 * 60000); // cheap: the page only re-renders when trends.json actually changed
+  setInterval(load, 10 * 60000);
   setTimeout(function () { location.reload(); }, 6 * 36e5); // TV browsers leak memory over days
 })();
 </script>

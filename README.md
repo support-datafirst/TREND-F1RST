@@ -1,6 +1,6 @@
 # TREND F1RST
 
-จอทีวีแสดงเทรนด์ไทย 75% / ต่างประเทศ 25% จาก Google, X, YouTube, Pantip, Wikipedia, Apple Music, Hacker News
+จอทีวีแสดงเทรนด์ไทย 75% / ต่างประเทศ 25% จาก Google, X, YouTube, Pantip, Blognone, Apple Music
 พร้อม YouTube, สภาพอากาศ/ฝุ่น PM2.5 และสไลด์ข่าวสาร
 
 เปิดบนทีวี: https://support-datafirst.github.io/TREND-F1RST/

@@ -29,12 +29,23 @@ const clean = (s = '') => s
 
 const short = n => (n = +n) >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
 
+// RSS <item>s as tag readers: rss(xml)[0]('title') -> decoded text of the first item's <title>.
+const rss = xml => [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, it]) =>
+  t => decode((it.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`)) || [])[1] || ''));
+
 async function google(geo) {
-  const xml = await get(`https://trends.google.com/trending/rss?geo=${geo}`);
-  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, it]) => {
-    const tag = t => decode((it.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`)) || [])[1] || '');
-    return { title: tag('title'), sub: tag('ht:news_item_title'), metric: tag('ht:approx_traffic') + ' ค้นหา', img: tag('ht:picture') };
-  });
+  return rss(await get(`https://trends.google.com/trending/rss?geo=${geo}`)).map(tag => ({
+    title: tag('title'), sub: tag('ht:news_item_title'), metric: tag('ht:approx_traffic') + ' ค้นหา', img: tag('ht:picture'),
+  }));
+}
+
+// Blognone: latest Thai tech news (the feed has no images). Older posts pinned on top (sponsored) are dropped.
+async function blognone() {
+  return rss(await get('https://www.blognone.com/atom.xml')).map(tag => [tag('title'), new Date(tag('pubDate'))])
+    .filter(([, at]) => Date.now() - at < 2 * 864e5)
+    .map(([title, at]) => ({
+      title, metric: 'ข่าวไอที · ' + at.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+    }));
 }
 
 // trends24.in scrape (no official free X API). First <ol> = latest hour.
@@ -57,30 +68,9 @@ async function youtube(region, category) {
   }));
 }
 
-const WIKI_SKIP = /^(Main_Page|หน้าหลัก|-|(Special|Wikipedia|File|Portal|Help|Category|Template|User|Talk|พิเศษ|วิกิพีเดีย|ไฟล์|หมวดหมู่|สถานีย่อย|แม่แบบ|ผู้ใช้|วิธีใช้):.*)$/;
-
-async function wiki(lang) {
-  // Wikimedia publishes a day's top list some hours after UTC midnight: try yesterday, then the day before.
-  for (const back of [1, 2]) {
-    const day = new Date(Date.now() - back * 864e5).toISOString().slice(0, 10).replace(/-/g, '/');
-    try {
-      const j = await get(`https://wikimedia.org/api/rest_v1/metrics/pageviews/top/${lang}.wikipedia/all-access/${day}`, true);
-      return j.items[0].articles.filter(a => !WIKI_SKIP.test(a.article))
-        .map(a => ({ title: a.article.replace(/_/g, ' '), metric: short(a.views) + ' อ่าน' }));
-    } catch {}
-  }
-  throw new Error(`wiki ${lang}: no data`);
-}
-
 async function apple(cc) {
   const j = await get(`https://rss.marketingtools.apple.com/api/v2/${cc}/music/most-played/${PER_SOURCE}/songs.json`, true);
   return j.feed.results.map(s => ({ title: s.name, sub: s.artistName, metric: 'เพลงฮิต', img: s.artworkUrl100.replace('100x100bb', '400x400bb') }));
-}
-
-async function hn() {
-  const ids = (await get('https://hacker-news.firebaseio.com/v0/topstories.json', true)).slice(0, 10);
-  const items = await Promise.all(ids.map(id => get(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, true)));
-  return items.map(i => ({ title: i.title, metric: i.score + ' points' }));
 }
 
 // Pantip Realtime (most-read topics right now), taken from the homepage's server-rendered data.
@@ -160,15 +150,13 @@ const SOURCES = [
   ['youtube', 'TH', () => youtube('TH'), 15],
   ['ytnews', 'TH', () => youtube('TH', 25), 8],
   ['pantip', 'TH', pantip],
-  ['wiki', 'TH', () => wiki('th'), 3],
-  ['apple', 'TH', () => apple('th'), 2], // wiki and songs matter less: keep them few
+  ['blognone', 'TH', blognone, 8],
+  ['apple', 'TH', () => apple('th'), 2], // songs matter less: keep them few
   ['google', 'US', () => google('US')],
   ['google', 'GB', () => google('GB')],
   ['x', 'US', () => x('united-states')],
   ['youtube', 'US', () => youtube('US')],
-  ['wiki', 'EN', () => wiki('en'), 3],
   ['apple', 'US', () => apple('us'), 2],
-  ['hn', 'TECH', hn],
 ];
 
 // ponytail: word list, not a classifier. Short Thai words match the whole title only (หี ≠ หีบเพลง). Extend when something slips onto the TV.
@@ -234,7 +222,7 @@ async function main() {
 
 function check() {
   const mk = (source, region, n) => Array.from({ length: n }, (_, i) => ({ source, region, title: `${source}${region}${i}` }));
-  const out = mix([mk('google', 'TH', 30), mk('x', 'TH', 30), mk('google', 'US', 50), mk('hn', 'TECH', 50)]);
+  const out = mix([mk('google', 'TH', 30), mk('x', 'TH', 30), mk('google', 'US', 50), mk('x', 'US', 50)]);
   const th = out.filter(i => i.region === 'TH').length;
   assert.deepEqual([th, out.length], [60, 80], 'ratio should be 60 TH : 20 intl');
   assert.deepEqual([out[0].source, out[1].source], ['google', 'x'], 'platforms should alternate');

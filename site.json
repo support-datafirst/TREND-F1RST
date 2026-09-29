@@ -1,0 +1,16 @@
+{
+ "youtube": "https://www.youtube.com/embed/Ig3OEW6zg4Q?playlist=Ig3OEW6zg4Q&autoplay=1&mute=1&controls=0&rel=0&playsinline=1&loop=1",
+ "slides": [
+  "slides/01-Acc.jpg",
+  "slides/02-wifi.jpg",
+  "slides/03-bin.jpg",
+  "slides/MBTI-fantasy-QR-announcement.jpg"
+ ],
+ "slideSeconds": 10,
+ "api": "https://script.google.com/macros/s/AKfycbyUoKmMSbzqOIAiFJL6SSlWA75NFyvWyGlFMdztKfDeO3L_0WRyT6ufIFS3-VEKRH2kCA/exec",
+ "apiMinutes": 180,
+ "location": {
+  "lat": 13.7588,
+  "lon": 100.533
+ }
+}

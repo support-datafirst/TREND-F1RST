@@ -13,6 +13,7 @@
 | สไลด์ข่าวสาร | อัปโหลดรูป 16:9 (1920×1080, jpg/png) เข้าโฟลเดอร์ [slides/](slides) เรียงตามชื่อไฟล์ ลบไฟล์เพื่อเอาออก |
 | เวลาต่อสไลด์ | `"slideSeconds"` ใน config.json |
 | พิกัดอากาศ/ฝุ่น | `"location"` ใน config.json (ใช้สถานี Air4Thai ที่ใกล้ที่สุด) |
+| ความถี่ดึงเทรนด์ | `"apiMinutes"` ใน config.json (ค่าเริ่มต้น 180 = ทุก 3 ชม.) |
 
 ## ปรับหน้าจอผ่าน URL
 
@@ -20,5 +21,9 @@
 
 ## เบื้องหลัง
 
-`fetch.js` รันบน GitHub Actions ทุก 30 นาที (และทุกครั้งที่แก้ config.json / slides) แล้วเขียน `trends.json`
-คีย์ YouTube อยู่ใน Settings → Secrets → Actions ชื่อ `YT_API_KEY` · ทดสอบ: `node fetch.js --check`
+- **ข้อมูลสด** (เทรนด์ อากาศ ฝุ่น ห้องในออฟฟิศ): หน้าเว็บยิงไปที่ Google Apps Script web app (`"api"` ใน config.json) ทุก `apiMinutes`
+  โค้ดอยู่ที่ [gas/Code.gs](gas/Code.gs) · คีย์ YouTube อยู่ใน Script Properties ชื่อ `YT_API_KEY`
+  เปิด URL ของ API ในเบราว์เซอร์จะเห็น `"log"` บอกว่าแหล่งไหนดึงได้ (✓) หรือพัง (✗)
+- **แก้ gas/Code.gs แล้ว:** วางโค้ดใหม่ใน Apps Script → Deploy → Manage deployments → ✏️ → Version: New version (URL เดิม)
+- **YouTube และสไลด์:** GitHub Actions รัน `site.js` เมื่อแก้ config.json หรือ slides/ แล้วเขียน `site.json`
+- ทดสอบ: `node gas/test.js --check` · `node gas/test.js` (ดึงจริง) · `node site.js --check`

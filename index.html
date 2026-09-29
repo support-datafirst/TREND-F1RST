@@ -101,7 +101,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     blognone: ['Blognone', '#3cc9b4'], apple: ['Apple Music', '#ff5c8a']
   };
 
-  var grid = document.getElementById('grid'), cells = [], order = [], items = [], raw = '', updated = '', next = 0, turn = 0, i;
+  var grid = document.getElementById('grid'), cells = [], order = [], items = [], updated = '', next = 0, turn = 0, i;
+  var cfg = null, siteRaw = '';
   var ytSrc = null, slides = [], slideAt = 0, slideMs = 10000, shown = '', wxPages = [null], wxAt = 0;
   grid.style.fontSize = Math.min(5 / ROWS, 5 / COLS) + 'vh';
   for (i = 0; i < ROWS * COLS; i++) {
@@ -171,10 +172,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 
   function $(id) { return document.getElementById(id); }
 
-  // Left column: YouTube, weather/PM2.5, slides. All come from trends.json (fetch.js copies them from config.json).
-  function side(d) {
-    if (d.youtube !== ytSrc) { // reload the player only when the link changes, not on every refresh
-      ytSrc = d.youtube;
+  // Static part of the left column (site.json, rebuilt from config.json and slides/ when someone edits them).
+  function site(s) {
+    if (s.youtube !== ytSrc) { // reload the player only when the link changes, not on every refresh
+      ytSrc = s.youtube;
       $('ytBox').innerHTML = ytSrc ? '<div class="fill"></div>' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
       if (ytSrc) {
         var f = document.createElement('iframe');
@@ -183,6 +184,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
         $('ytBox').firstChild.appendChild(f);
       }
     }
+    slides = s.slides || [];
+    slideMs = (s.slideSeconds || 10) * 1000;
+    $('slEmpty').style.display = slides.length ? 'none' : '';
+    var n = slides.length > 1 ? slides.length : 0, dots = '';
+    if ($('dots').childNodes.length !== n) {
+      for (var k = 0; k < n; k++) dots += '<i></i>';
+      $('dots').innerHTML = dots;
+    }
+    if (!slides.length) { $('slide').style.backgroundImage = 'none'; shown = ''; }
+  }
+
+  // Live part: weather, outdoor PM2.5 and office rooms (from the Apps Script API, with the trends).
+  function outside(d) {
     var w = d.weather, a = d.air;
     if (w) {
       $('wxTemp').textContent = w.temp + '°';
@@ -209,15 +223,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
       if (r && r % 4 === 0) wxPages.push(null);
       wxPages.push([rooms[r], rooms[r + 1] || (rooms.length > 2 ? rooms[0] : null)]);
     }
-    slides = d.slides || [];
-    slideMs = (d.slideSeconds || 10) * 1000;
-    $('slEmpty').style.display = slides.length ? 'none' : '';
-    var n = slides.length > 1 ? slides.length : 0, dots = '';
-    if ($('dots').childNodes.length !== n) {
-      for (var k = 0; k < n; k++) dots += '<i></i>';
-      $('dots').innerHTML = dots;
-    }
-    if (!slides.length) { $('slide').style.backgroundImage = 'none'; shown = ''; }
   }
 
   var ROOM = '<div class="room"><div class="rh"><div class="rt"><div class="rn"></div><div class="rp"></div></div>' +
@@ -273,33 +278,58 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
   function pad(n) { return n < 10 ? '0' + n : n; }
   function hhmm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 
-  function load() {
+  function get(url, ok, fail) {
     var x = new XMLHttpRequest();
-    x.open('GET', 'trends.json?t=' + Date.now());
+    x.open('GET', url);
     x.onload = function () {
       var d;
-      try { d = JSON.parse(x.responseText); } catch (e) { return; }
-      if (!d.items || !d.items.length || x.responseText === raw) return;
-      var first = !items.length;
-      raw = x.responseText;
-      items = d.items;
-      updated = d.updated;
-      side(d);
-      if (first) {
-        for (var k = 0; k < cells.length; k++) fill(cells[order[k]], items[k % items.length]);
-        next = cells.length;
-        nextSlide();
-        nextWx();
-        // Titles measured before the web font arrived were sized for the fallback font: measure again once it is in.
-        if (document.fonts) document.fonts.ready.then(function () {
-          for (var k = 0; k < cells.length; k++) fill(cells[k], cells[k].it);
-        });
-      } else {
-        next = 0; // new data: start again from the top-ranked items
-      }
-      tick();
+      try { d = JSON.parse(x.responseText); } catch (e) { if (fail) fail(); return; }
+      ok(d, x.responseText);
     };
+    x.onerror = function () { if (fail) fail(); };
     x.send();
+  }
+
+  function show(d) {
+    if (!d.items || !d.items.length) return;
+    var first = !items.length;
+    items = d.items;
+    updated = d.updated;
+    outside(d);
+    if (first) {
+      for (var k = 0; k < cells.length; k++) fill(cells[order[k]], items[k % items.length]);
+      next = cells.length;
+      nextWx();
+      // Titles measured before the web font arrived were sized for the fallback font: measure again once it is in.
+      if (document.fonts) document.fonts.ready.then(function () {
+        for (var k = 0; k < cells.length; k++) fill(cells[k], cells[k].it);
+      });
+    } else {
+      next = 0; // new data: start again from the top-ranked items
+    }
+    tick();
+  }
+
+  function loadSite() {
+    get('site.json?t=' + Date.now(), function (s, text) {
+      if (text === siteRaw) return;
+      var first = !cfg;
+      siteRaw = text;
+      cfg = s;
+      site(s);
+      if (first) { nextSlide(); loadData(); }
+    });
+  }
+
+  // Trends, weather, PM2.5 and office rooms from the Apps Script web app every apiMinutes; retry in 5 min on failure.
+  // A cold call takes ~30 s, so the last answer is kept in localStorage and shown at once after a page reload.
+  function loadData() {
+    var loc = cfg.location || {};
+    get(cfg.api + '?lat=' + loc.lat + '&lon=' + loc.lon + '&t=' + Date.now(), function (d, text) {
+      setTimeout(loadData, (cfg.apiMinutes || 180) * 60000);
+      show(d);
+      try { localStorage.trendsCache = text; } catch (e) {}
+    }, function () { setTimeout(loadData, 5 * 60000); });
   }
 
   function tick() {
@@ -307,7 +337,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     document.getElementById('clock').textContent = hhmm(now);
     if (!updated) return;
     el.textContent = 'อัปเดต ' + hhmm(new Date(updated));
-    el.className = now - new Date(updated) > 2 * 36e5 ? 'stale' : ''; // red = fetch job stopped
+    el.className = now - new Date(updated) > 2 * ((cfg && cfg.apiMinutes) || 180) * 60000 ? 'stale' : ''; // red: missed 2 updates
   }
 
   // ?debug=1 on the TV shows what its browser really does (viewport, forced minimum font sizes, title measurements).
@@ -320,11 +350,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     document.body.appendChild(d);
   }, 5000);
 
-  load();
+  try { if (localStorage.trendsCache) show(JSON.parse(localStorage.trendsCache)); } catch (e) {}
+  loadSite();
   tick();
   setInterval(function () { for (var n = 0; n < PER_TICK; n++) swap(); }, SWAP_MS);
   setInterval(tick, 10000);
-  setInterval(load, 10 * 60000);
+  setInterval(loadSite, 10 * 60000);
   setTimeout(function () { location.reload(); }, 6 * 36e5); // TV browsers leak memory over days
 })();
 </script>

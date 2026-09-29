@@ -28,7 +28,7 @@ const ctx = vm.createContext({
 vm.runInContext(readFileSync(__dirname + '/Code.gs', 'utf8'), ctx);
 
 if (process.argv[2] === '--check') {
-  console.log(ctx.check());
+  ctx.check();
 } else {
   const d = JSON.parse(ctx.doGet({ parameter: { lat: '13.7588', lon: '100.533' } }).getContent());
   const bySource = {};

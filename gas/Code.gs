@@ -230,5 +230,5 @@ function check() {
     { airPurifierName: 'Data Lab - Data First Floor 3', timestamp: '2026-09-24T15:02:14', pM25: 30, temp: 25.3, humidity: 75 },
   ]);
   eq(rooms.map(r => [r.room, r.place, r.label]), [['Data Lab', 'Data First · ชั้น 3', 'ปานกลาง'], ['Pizza Room', 'FEFLDDB · ชั้น 5', 'ดีมาก']], 'office rooms: stale dropped, sorted');
-  return 'check done';
+  console.log('check done');
 }

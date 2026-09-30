@@ -102,7 +102,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
   };
 
   var grid = document.getElementById('grid'), cells = [], order = [], items = [], updated = '', next = 0, turn = 0, i;
-  var cfg = null, siteRaw = '';
+  var cfg = null, siteRaw = '', dataRaw = '', resetting = false;
   var ytSrc = null, slides = [], slideAt = 0, slideMs = 10000, shown = '', wxPages = [null], wxAt = 0;
   grid.style.fontSize = Math.min(5 / ROWS, 5 / COLS) + 'vh';
   for (i = 0; i < ROWS * COLS; i++) {
@@ -164,7 +164,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
   }
 
   function swap() {
-    if (!items.length) return;
+    if (!items.length || resetting) return;
     var cell = cells[order[turn++ % cells.length]], it = items[next++ % items.length];
     cell.className = 'cell out';
     setTimeout(function () { fill(cell, it); cell.className = 'cell'; }, 700);
@@ -290,22 +290,35 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     x.send();
   }
 
-  function show(d) {
-    if (!d.items || !d.items.length) return;
+  // Whole grid from the top of the list. Cell order[k] gets item k, and swapping restarts at order[0], the oldest.
+  function refill() {
+    for (var k = 0; k < cells.length; k++) {
+      fill(cells[order[k]], items[k % items.length]);
+      cells[order[k]].className = 'cell';
+    }
+    next = cells.length;
+    turn = 0;
+  }
+
+  function show(d, text) {
+    if (!d.items || !d.items.length || text === dataRaw) return;
     var first = !items.length;
+    dataRaw = text;
     items = d.items;
     updated = d.updated;
     outside(d);
     if (first) {
-      for (var k = 0; k < cells.length; k++) fill(cells[order[k]], items[k % items.length]);
-      next = cells.length;
+      refill();
       nextWx();
       // Titles measured before the web font arrived were sized for the fallback font: measure again once it is in.
       if (document.fonts) document.fonts.ready.then(function () {
         for (var k = 0; k < cells.length; k++) fill(cells[k], cells[k].it);
       });
     } else {
-      next = 0; // new data: start again from the top-ranked items
+      // New data: every card fades out together, then the whole new set comes in (swapping pauses meanwhile).
+      resetting = true;
+      for (var k = 0; k < cells.length; k++) cells[k].className = 'cell out';
+      setTimeout(function () { refill(); resetting = false; }, 800);
     }
     tick();
   }
@@ -327,7 +340,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     var loc = cfg.location || {};
     get(cfg.api + '?lat=' + loc.lat + '&lon=' + loc.lon + '&t=' + Date.now(), function (d, text) {
       setTimeout(loadData, (cfg.apiMinutes || 180) * 60000);
-      show(d);
+      show(d, text);
       try { localStorage.trendsCache = text; } catch (e) {}
     }, function () { setTimeout(loadData, 5 * 60000); });
   }
@@ -350,7 +363,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     document.body.appendChild(d);
   }, 5000);
 
-  try { if (localStorage.trendsCache) show(JSON.parse(localStorage.trendsCache)); } catch (e) {}
+  try { if (localStorage.trendsCache) show(JSON.parse(localStorage.trendsCache), localStorage.trendsCache); } catch (e) {}
   loadSite();
   tick();
   setInterval(function () { for (var n = 0; n < PER_TICK; n++) swap(); }, SWAP_MS);

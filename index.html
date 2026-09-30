@@ -129,6 +129,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     var j = Math.floor(Math.random() * (i + 1)), t = order[i];
     order[i] = order[j]; order[j] = t;
   }
+  var pos = []; // pos[cell index] = its place in order
+  for (i = 0; i < order.length; i++) pos[order[i]] = i;
 
   function fill(cell, it) {
     var p = PLATFORMS[it.source] || [it.source, '#888'], card = cell.firstChild;
@@ -170,11 +172,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     el.style.webkitLineClamp = Math.max(1, room);
   }
 
+  // One card change: fade out, fill, fade back in, starting `ms` from now.
+  function flip(cell, it, ms) {
+    setTimeout(function () {
+      cell.className = 'cell out';
+      setTimeout(function () { fill(cell, it); cell.className = 'cell'; }, 700);
+    }, ms);
+  }
+
   function swap() {
     if (!items.length || resetting) return;
-    var cell = cells[order[turn++ % cells.length]], it = items[next++ % items.length];
-    cell.className = 'cell out';
-    setTimeout(function () { fill(cell, it); cell.className = 'cell'; }, 700);
+    flip(cells[order[turn++ % cells.length]], items[next++ % items.length], 0);
   }
 
   function $(id) { return document.getElementById(id); }
@@ -298,11 +306,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     x.send();
   }
 
-  // Whole grid from the top of the list. Cell order[k] gets item k, and swapping restarts at order[0], the oldest.
-  function refill() {
-    for (var k = 0; k < cells.length; k++) {
-      fill(cells[order[k]], items[k % items.length]);
-      cells[order[k]].className = 'cell';
+  // Whole grid from the top of the list: cell order[k] gets item k, so swapping restarts at order[0], the oldest.
+  // With `step`, cards change one after another in reading order (cells[] runs left to right, top to bottom).
+  function refill(step) {
+    for (var j = 0; j < cells.length; j++) {
+      var it = items[pos[j] % items.length];
+      if (step) flip(cells[j], it, j * step);
+      else { fill(cells[j], it); cells[j].className = 'cell'; }
     }
     next = cells.length;
     turn = 0;
@@ -316,17 +326,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
     updated = d.updated;
     outside(d);
     if (first) {
-      refill();
+      refill(0);
       nextWx();
       // Titles measured before the web font arrived were sized for the fallback font: measure again once it is in.
       if (document.fonts) document.fonts.ready.then(function () {
         for (var k = 0; k < cells.length; k++) fill(cells[k], cells[k].it);
       });
     } else {
-      // New data: every card fades out together, then the whole new set comes in (swapping pauses meanwhile).
+      // New data: a wave in reading order, each old card replaced by a new one right after it fades.
+      // Random swapping pauses until the wave has passed.
       resetting = true;
-      for (var k = 0; k < cells.length; k++) cells[k].className = 'cell out';
-      setTimeout(function () { refill(); resetting = false; }, 800);
+      refill(150);
+      setTimeout(function () { resetting = false; }, cells.length * 150 + 1400);
     }
     tick();
   }

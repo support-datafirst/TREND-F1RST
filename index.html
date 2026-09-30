@@ -9,11 +9,18 @@
 <!-- Plain ES5 + prefixed flexbox on purpose: Samsung/LG TV browsers run old engines (no CSS grid, no arrow functions). -->
 <style>
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; color: #f3f4f6; font-family: 'Noto Sans Thai', Tahoma, sans-serif; cursor: none; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; color: #f3f4f6; font-family: 'Noto Sans Thai', Tahoma, sans-serif; }
+#side, #grid { cursor: none; } /* pointer hidden over the content, still usable on the header */
 #bar { height: 5vh; padding: 0 1.4vw; font-size: 2.1vh; color: #7d8596; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: space-between; justify-content: space-between; }
 #bar b { color: #f3f4f6; letter-spacing: .06em; }
 #bar .one { color: #38bdf8; }
 #updated.stale { color: #ff6b6b; }
+#brand { cursor: pointer; }
+/* Spinner in front of "อัปเดต" while the Apps Script API is being fetched. */
+#spin { display: none; width: 1.5vh; height: 1.5vh; margin-right: .5vw; vertical-align: -.2vh; border: .25vh solid #2a3140; border-top-color: #38bdf8; border-radius: 50%; -webkit-animation: spin .8s linear infinite; animation: spin .8s linear infinite; }
+#spin.on { display: inline-block; }
+@-webkit-keyframes spin { to { -webkit-transform: rotate(360deg); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 /* Left 2 of 5 columns: YouTube (2 rows), weather (1 row), slides (2 rows). Right 3 columns: trends. */
 #side { position: absolute; top: 5vh; left: 0; bottom: 0; width: 40%; padding: 0 0 .8vw .8vw; }
 .slot { padding: .4vw; }
@@ -75,7 +82,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 </style>
 </head>
 <body>
-<div id="bar"><span><b>TREND F<span class="one">1</span>RST</b> &nbsp;เทรนด์ตอนนี้</span><span><span id="updated"></span> &nbsp; <b id="clock"></b></span></div>
+<div id="bar"><span><b id="brand" title="ดึงข้อมูลใหม่">TREND F<span class="one">1</span>RST</b> &nbsp;เทรนด์ตอนนี้</span><span><i id="spin"></i><span id="updated"></span> &nbsp; <b id="clock"></b></span></div>
 <div id="side">
   <div id="yt" class="slot"><div class="box" id="ytBox"></div></div>
   <div id="wx" class="slot"><div class="box" id="wxBox">
@@ -286,7 +293,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
       try { d = JSON.parse(x.responseText); } catch (e) { if (fail) fail(); return; }
       ok(d, x.responseText);
     };
-    x.onerror = function () { if (fail) fail(); };
+    x.onerror = x.ontimeout = function () { if (fail) fail(); };
+    x.timeout = 120000; // a hung Apps Script call must not leave the spinner running forever
     x.send();
   }
 
@@ -336,14 +344,26 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 
   // Trends, weather, PM2.5 and office rooms from the Apps Script web app every apiMinutes; retry in 5 min on failure.
   // A cold call takes ~30 s, so the last answer is kept in localStorage and shown at once after a page reload.
+  // One timer chain: a click on TREND F1RST fetches now and restarts the countdown; clicks during a fetch are ignored.
+  var dataTimer, loading = false;
   function loadData() {
+    if (!cfg || loading) return;
+    loading = true;
+    clearTimeout(dataTimer);
+    $('spin').className = 'on';
     var loc = cfg.location || {};
     get(cfg.api + '?lat=' + loc.lat + '&lon=' + loc.lon + '&t=' + Date.now(), function (d, text) {
-      setTimeout(loadData, (cfg.apiMinutes || 180) * 60000);
+      done((cfg.apiMinutes || 180) * 60000);
       show(d, text);
       try { localStorage.trendsCache = text; } catch (e) {}
-    }, function () { setTimeout(loadData, 5 * 60000); });
+    }, function () { done(5 * 60000); });
   }
+  function done(wait) {
+    loading = false;
+    $('spin').className = '';
+    dataTimer = setTimeout(loadData, wait);
+  }
+  $('brand').onclick = loadData;
 
   function tick() {
     var now = new Date(), el = document.getElementById('updated');

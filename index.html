@@ -98,10 +98,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 <div id="grid"></div>
 <script>
 (function () {
-  // ?rows=5&cols=3&speed=5&swap=3 (every `speed` seconds, `swap` cards change at once), same idea as trends.google.com/tv
+  // ?rows=5&cols=3&speed=5 (every `speed` seconds 3-5 random cards change; &swap=N fixes it at N), like trends.google.com/tv
   var q = {};
   location.search.replace(/[?&](\w+)=(\d+)/g, function (_, k, v) { q[k] = +v; });
-  var ROWS = q.rows || 5, COLS = q.cols || 3, SWAP_MS = (q.speed || 5) * 1000, PER_TICK = q.swap || 3;
+  var ROWS = q.rows || 5, COLS = q.cols || 3, SWAP_MS = (q.speed || 5) * 1000;
   var PLATFORMS = {
     google: ['Google', '#5b9bff'], x: ['X', '#f5f5f5'], youtube: ['YouTube', '#ff4040'], ytnews: ['YouTube ข่าว', '#ff4040'],
     pantip: ['Pantip', '#a78bfa'],
@@ -386,7 +386,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
   try { if (localStorage.trendsCache) show(JSON.parse(localStorage.trendsCache), localStorage.trendsCache); } catch (e) {}
   loadSite();
   tick();
-  setInterval(function () { for (var n = 0; n < PER_TICK; n++) swap(); }, SWAP_MS);
+  setInterval(function () {
+    for (var n = 0, count = q.swap || 3 + Math.floor(Math.random() * 3); n < count; n++) swap();
+  }, SWAP_MS);
   setInterval(tick, 10000);
   setInterval(loadSite, 10 * 60000);
   setTimeout(function () { location.reload(); }, 6 * 36e5); // TV browsers leak memory over days

@@ -1,6 +1,7 @@
 // Runs Code.gs in Node with stand-ins for the Apps Script services (curl plays UrlFetchApp).
 // node gas/test.js            -> fetch everything like the web app would, print the log and a summary
 // node gas/test.js --check    -> unit checks only        (YT_API_KEY=... in the env enables YouTube)
+// node gas/test.js --json     -> the full JSON the web app would return
 const vm = require('node:vm');
 const { readFileSync } = require('node:fs');
 const { execFileSync } = require('node:child_process');
@@ -11,12 +12,13 @@ function fetch(url, opts = {}) {
   try {
     out = execFileSync('curl', ['-sL', '--max-time', '20', '-A', ua, '-w', '\n%{http_code}', url], { maxBuffer: 1 << 26 }).toString();
   } catch (e) {
-    throw new Error(`fetch failed: ${url.split('?')[0]}`); // like UrlFetchApp on DNS/TLS/timeout errors
+    throw new CtxError(`fetch failed: ${url.split('?')[0]}`); // like UrlFetchApp on DNS/TLS/timeout errors
   }
   const cut = out.lastIndexOf('\n');
   return { getResponseCode: () => +out.slice(cut + 1), getContentText: () => out.slice(0, cut) };
 }
 
+let CtxError = Error; // set below to the sandbox's Error, so Code.gs's `instanceof Error` sees it
 const cache = new Map();
 const ctx = vm.createContext({
   console,
@@ -25,12 +27,15 @@ const ctx = vm.createContext({
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => process.env[k] || null }) },
   ContentService: { MimeType: { JSON: 'json' }, createTextOutput: t => ({ setMimeType() { return this; }, getContent: () => t }) },
 });
+CtxError = vm.runInContext('Error', ctx);
 vm.runInContext(readFileSync(__dirname + '/Code.gs', 'utf8'), ctx);
 
 if (process.argv[2] === '--check') {
   ctx.check();
 } else {
-  const d = JSON.parse(ctx.doGet({ parameter: { lat: '13.7588', lon: '100.533' } }).getContent());
+  const json = ctx.doGet({ parameter: { lat: '13.7588', lon: '100.533' } }).getContent();
+  if (process.argv[2] === '--json') return console.log(json);
+  const d = JSON.parse(json);
   const bySource = {};
   d.items.forEach(i => { bySource[i.source] = (bySource[i.source] || 0) + 1; });
   console.log(d.log.join('\n'));

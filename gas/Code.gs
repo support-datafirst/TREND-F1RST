@@ -131,20 +131,29 @@ const BLOCK = /^(หี|หำ|จู๋|โป๊)$|ควย|เย็ด|เ�
 const spread = lists => lists.flatMap(l => l.map((it, i) => [(i + 0.5) / l.length, it]))
   .sort((a, b) => a[0] - b[0]).map(p => p[1]);
 
-// Spread per region so platforms alternate, then 3 TH : 1 intl. Leftover intl is dropped to hold the ratio.
-function mix(lists) {
-  const th = spread(lists.filter(l => l[0] && l[0].region === 'TH'));
-  const intl = spread(lists.filter(l => l[0] && l[0].region !== 'TH'));
-  const out = [], seen = new Set();
-  th.forEach((t, i) => {
-    out.push(t);
-    if (i % 3 === 2 && intl.length) out.push(intl.shift());
-  });
-  return out.filter(it => {
+// Drops blocked titles and repeats (case, spaces and # ignored).
+function distinct(items) {
+  const seen = new Set();
+  return items.filter(it => {
     const k = it.title.toLowerCase().replace(/[#\s]/g, '');
     return k && !BLOCK.test(it.title) && !seen.has(k) && seen.add(k);
   });
 }
+
+// Spread per region so platforms alternate, then 3 TH : 1 intl. Leftover intl is dropped to hold the ratio.
+function mix(lists) {
+  const th = spread(lists.filter(l => l[0] && l[0].region === 'TH'));
+  const intl = spread(lists.filter(l => l[0] && l[0].region !== 'TH'));
+  const out = [];
+  th.forEach((t, i) => {
+    out.push(t);
+    if (i % 3 === 2 && intl.length) out.push(intl.shift());
+  });
+  return distinct(out);
+}
+
+// First n of one platform's own ranking, for the TV's big Top cards (TH and US side by side).
+const topOf = (items, n) => distinct(items).slice(0, n).map(it => ({ title: it.title, sub: it.sub, metric: it.metric, img: it.img }));
 
 // Every URL in one parallel batch. One bad host (TLS, DNS) makes fetchAll throw for all, so then retry one by one.
 // Returns the body text, or an Error, per URL.
@@ -182,12 +191,20 @@ function collect(lat, lon, last) {
   });
   const [wx, aq, rooms] = texts.slice(list.length);
   const items = mix(lists);
+  const top = (source, region, n) => topOf(lists[list.findIndex(s => s[0] === source && s[1] === region)] || [], n);
+  const tops = {
+    google: { TH: top('google', 'TH', 10), US: top('google', 'US', 10) },
+    x: { TH: top('x', 'TH', 10), US: top('x', 'US', 10) },
+    youtube: { TH: top('youtube', 'TH', 5) },
+    ytnews: { TH: top('ytnews', 'TH', 5) },
+  };
   // Nearly everything failed: keep the last good trends and their timestamp, so the TV flags them as stale.
   const fresh = items.length >= 30;
   if (!fresh) log.push(`✗ only ${items.length} items, keeping previous trends`);
   return {
     updated: fresh ? new Date().toISOString() : last.updated,
     items: fresh ? items : last.items || items,
+    tops: fresh ? tops : last.tops || tops,
     weather: parse('weather', weather, wx) || last.weather,
     air: parse('air', t => air(t, lat, lon), aq) || last.air,
     office: parse('office', t => officeRooms(JSON.parse(t).data), rooms) || last.office || [],
@@ -219,6 +236,7 @@ function check() {
   eq(mix([[{ region: 'TH', title: 'Linkin Park' }], [{ region: 'TH', title: '#linkinpark' }]]).length, 1, 'dedupe');
   const few = mix([mk('google', 'TH', 10), mk('apple', 'TH', 2)]);
   eq(few.map((it, i) => it.source === 'apple' ? i : -1).filter(i => i >= 0), [3, 9], 'short list spreads out');
+  eq(topOf([{ title: '#MFW' }, { title: '#mfw' }, { title: 'หี' }, { title: 'B' }, { title: 'C' }], 2).map(i => i.title), ['#MFW', 'B'], 'top list: distinct, unblocked, first n');
   eq(mix([[{ region: 'TH', title: 'หี' }, { region: 'TH', title: 'หีบเพลง' }, { region: 'TH', title: 'Pornhub' }]]).map(i => i.title), ['หีบเพลง'], 'block list');
   eq(clean('🔴Live สด! 𝐏𝐔𝐁𝐆 𝐓𝐇𝐀𝐈𝐋𝐀𝐍𝐃 𝟐𝟎𝟐𝟔 🇹🇭 ❤️'), 'Live สด! PUBG THAILAND 2026', 'fancy unicode');
   eq(clean('กำลังมาแรง'), 'กำลังมาแรง', 'Thai sara am must survive');

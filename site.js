@@ -1,4 +1,4 @@
-// Builds site.json (YouTube embed, slide list, API settings) from config.json and the slides/ folder.
+// Builds site.json (YouTube embed, urgent notice, slide list, API settings) from config.json and the slides/ and notice/ folders.
 // GitHub Actions runs it whenever someone edits either. Live data comes from the Apps Script API (gas/Code.gs).
 // node site.js   |   self-check: node site.js --check
 const { writeFileSync, readdirSync } = require('node:fs');
@@ -22,18 +22,21 @@ if (process.argv[2] === '--check') {
   console.log('check done');
 } else {
   const config = require('./config.json');
-  let slides = [];
-  try {
-    slides = readdirSync(__dirname + '/slides').filter(f => /\.(jpe?g|png|webp|gif)$/i.test(f)).sort()
-      .map(f => 'slides/' + encodeURIComponent(f));
-  } catch {}
+  const images = dir => {
+    try {
+      return readdirSync(__dirname + '/' + dir).filter(f => /\.(jpe?g|png|webp|gif)$/i.test(f)).sort().map(f => dir + '/' + encodeURIComponent(f));
+    } catch { return []; }
+  };
+  const slides = images('slides');
+  const notice = images('notice')[0] || ''; // an image in notice/ replaces the YouTube video until it is deleted
   writeFileSync(__dirname + '/site.json', JSON.stringify({
     youtube: youtubeEmbed(config.youtube),
+    notice,
     slides,
     slideSeconds: config.slideSeconds || 10,
     api: config.api,
     apiMinutes: config.apiMinutes || 180,
     location: config.location,
   }, null, 1) + '\n');
-  console.log(`site.json: ${slides.length} slides, youtube ${config.youtube ? 'on' : 'off'}`);
+  console.log(`site.json: ${slides.length} slides, ${notice ? 'notice ' + notice : 'youtube ' + (config.youtube ? 'on' : 'off')}`);
 }

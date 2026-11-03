@@ -1,9 +1,9 @@
 name: build site.json
 on:
   workflow_dispatch:
-  push: # someone changed the YouTube link or slides: rebuild site.json. Live data comes from Apps Script, no schedule needed.
+  push: # someone changed the YouTube link, slides or urgent notice: rebuild site.json. Live data comes from Apps Script, no schedule needed.
     branches: [main]
-    paths: ['config.json', 'slides/**', 'site.js']
+    paths: ['config.json', 'slides/**', 'notice/**', 'site.js']
 concurrency: build-site
 permissions:
   contents: write

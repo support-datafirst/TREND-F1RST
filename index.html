@@ -31,6 +31,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 /* 16:9 player as wide as the box and centred, so the video covers it (top/bottom trimmed) instead of showing side bars. */
 #ytBox .fill { position: absolute; left: 0; right: 0; top: 50%; padding-top: 56.25%; -webkit-transform: translateY(-50%); transform: translateY(-50%); }
 #ytBox iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+/* Urgent notice image (notice/ folder) shown instead of the video, whole image visible. */
+.notice { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #0b0e14; background-position: center; background-repeat: no-repeat; background-size: contain; }
 .empty { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 2vh; color: #7d8596; font-size: 2vh; text-align: center; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; }
 #slide { position: absolute; top: 0; left: 0; right: 2.4vw; bottom: 0; background-position: left center; background-repeat: no-repeat; background-size: contain; -webkit-transition: opacity .8s; transition: opacity .8s; }
 #slide.out { opacity: 0; }
@@ -211,12 +213,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 
   function $(id) { return document.getElementById(id); }
 
-  // Static part of the left column (site.json, rebuilt from config.json and slides/ when someone edits them).
+  // Static part of the left column (site.json, rebuilt from config.json, slides/ and notice/ when someone edits them).
   function site(s) {
-    if (s.youtube !== ytSrc) { // reload the player only when the link changes, not on every refresh
-      ytSrc = s.youtube;
-      $('ytBox').innerHTML = ytSrc ? '<div class="fill"></div>' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
-      if (ytSrc) {
+    var top = s.notice || s.youtube || ''; // an urgent notice image takes the video's place until it is deleted
+    if (top !== ytSrc) { // redraw only when it changes, so the player isn't restarted on every refresh
+      ytSrc = top;
+      $('ytBox').innerHTML = s.notice ? '<div class="notice" style="background-image:url(&quot;' + esc(s.notice) + '&quot;)"></div>'
+        : ytSrc ? '<div class="fill"></div>' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
+      if (ytSrc && !s.notice) {
         var f = document.createElement('iframe');
         f.src = ytSrc;
         f.setAttribute('allow', 'autoplay; encrypted-media');

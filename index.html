@@ -213,20 +213,28 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 
   function $(id) { return document.getElementById(id); }
 
+  // Top-left box: the first urgent notice image not past its end date, else the YouTube video.
+  // Runs on every site.json change and every tick, so a notice disappears on time without anyone pushing.
+  function showTop() {
+    if (!cfg) return;
+    var notice = '', list = cfg.notices || [];
+    for (var k = 0; k < list.length && !notice; k++) if (!list[k].until || new Date() < new Date(list[k].until)) notice = list[k].src;
+    var top = notice || cfg.youtube || '';
+    if (top === ytSrc) return; // redraw only on change, so the player isn't restarted every time
+    ytSrc = top;
+    $('ytBox').innerHTML = notice ? '<div class="notice" style="background-image:url(&quot;' + esc(notice) + '&quot;)"></div>'
+      : top ? '<div class="fill"></div>' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
+    if (top && !notice) {
+      var f = document.createElement('iframe');
+      f.src = top;
+      f.setAttribute('allow', 'autoplay; encrypted-media');
+      $('ytBox').firstChild.appendChild(f);
+    }
+  }
+
   // Static part of the left column (site.json, rebuilt from config.json, slides/ and notice/ when someone edits them).
   function site(s) {
-    var top = s.notice || s.youtube || ''; // an urgent notice image takes the video's place until it is deleted
-    if (top !== ytSrc) { // redraw only when it changes, so the player isn't restarted on every refresh
-      ytSrc = top;
-      $('ytBox').innerHTML = s.notice ? '<div class="notice" style="background-image:url(&quot;' + esc(s.notice) + '&quot;)"></div>'
-        : ytSrc ? '<div class="fill"></div>' : '<div class="empty">ใส่ลิงก์ YouTube ใน config.json บน GitHub</div>';
-      if (ytSrc && !s.notice) {
-        var f = document.createElement('iframe');
-        f.src = ytSrc;
-        f.setAttribute('allow', 'autoplay; encrypted-media');
-        $('ytBox').firstChild.appendChild(f);
-      }
-    }
+    showTop();
     slides = s.slides || [];
     slideMs = (s.slideSeconds || 10) * 1000;
     $('slEmpty').style.display = slides.length ? 'none' : '';
@@ -449,6 +457,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 
   function tick() {
     var now = new Date(), el = document.getElementById('updated');
+    showTop();
     document.getElementById('clock').textContent = hhmm(now);
     if (!updated) return;
     el.textContent = 'อัปเดต ' + hhmm(new Date(updated));

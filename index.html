@@ -33,6 +33,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; col
 #ytBox iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 /* Urgent notice image (notice/ folder) shown instead of the video, whole image visible. */
 .notice { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #0b0e14; background-position: center; background-repeat: no-repeat; background-size: contain; }
+/* Fire around the notice: two inner glows flickering at different rates so it looks alive. Opacity only, cheap for TVs. */
+.notice:before, .notice:after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.notice:before { box-shadow: inset 0 0 1vh .3vh #ff7a00, inset 0 0 3vh .8vh rgba(255, 60, 0, .6); -webkit-animation: burn 1.3s ease-in-out infinite alternate; animation: burn 1.3s ease-in-out infinite alternate; }
+.notice:after { box-shadow: inset 0 0 6vh 1.4vh rgba(255, 170, 0, .35); background: -webkit-linear-gradient(bottom, rgba(255, 90, 0, .25), rgba(255, 90, 0, 0) 12%); background: linear-gradient(to top, rgba(255, 90, 0, .25), rgba(255, 90, 0, 0) 12%); -webkit-animation: burn 2.1s ease-in-out infinite alternate-reverse; animation: burn 2.1s ease-in-out infinite alternate-reverse; }
+@-webkit-keyframes burn { 0% { opacity: .5; } 35% { opacity: 1; } 60% { opacity: .7; } 100% { opacity: .95; } }
+@keyframes burn { 0% { opacity: .5; } 35% { opacity: 1; } 60% { opacity: .7; } 100% { opacity: .95; } }
 .empty { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 2vh; color: #7d8596; font-size: 2vh; text-align: center; display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; }
 #slide { position: absolute; top: 0; left: 0; right: 2.4vw; bottom: 0; background-position: left center; background-repeat: no-repeat; background-size: contain; -webkit-transition: opacity .8s; transition: opacity .8s; }
 #slide.out { opacity: 0; }
